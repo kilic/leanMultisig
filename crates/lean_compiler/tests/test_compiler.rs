@@ -51,6 +51,30 @@ def main():
 }
 
 #[test]
+fn test_sha256_compress_rn() {
+    let program = r#"
+def main():
+    state = 0
+    block = 16
+    expected = 48
+    out = Array(16)
+    sha256_compress_rn(state, block, out)
+
+    for i in unroll(0, 16):
+        assert out[i] == expected[i]
+    return
+   "#;
+
+    let mut public_input = vec![F::ZERO; 64];
+    public_input[0..16].copy_from_slice(&words_to_field_limbs_le(SHA256_IV));
+    public_input[16..48].copy_from_slice(&words_to_field_limbs_le(SHA256_ABC_BLOCK));
+    let expected = words_to_field_limbs_le(sha256_compress_words(SHA256_IV, SHA256_ABC_BLOCK));
+    public_input[48..64].copy_from_slice(&expected);
+
+    compile_and_run(&ProgramSource::Raw(program.to_string()), &public_input, false);
+}
+
+#[test]
 fn test_div_extension_field() {
     let program = r#"
 DIM = 5

@@ -55,6 +55,16 @@ def main():
 #[test]
 #[ignore = "benchmark; run with `cargo test --release -p lean_prover bench_sha256_compress -- --ignored --nocapture`"]
 fn bench_sha256_compress() {
+    bench_sha256_compress_precompile("sha256_compress");
+}
+
+#[test]
+#[ignore = "benchmark; run with `cargo test --release -p lean_prover bench_sha256_compress_rn -- --ignored --nocapture`"]
+fn bench_sha256_compress_rn() {
+    bench_sha256_compress_precompile("sha256_compress_rn");
+}
+
+fn bench_sha256_compress_precompile(precompile_name: &str) {
     utils::init_tracing();
     let n_sha_calls = std::env::var("SHA256_BENCH_CALLS")
         .ok()
@@ -73,7 +83,7 @@ def main():
         block = base + 16
         expected = base + 48
         out = Array(16)
-        sha256_compress(state, block, out)
+        {precompile_name}(state, block, out)
 
         for i in unroll(0, 16):
             assert out[i] == expected[i]
@@ -107,6 +117,7 @@ def main():
     let proof_size_kib = proof.proof.proof_size_fe() * F::bits() / (8 * 1024);
 
     println!("{}", proof.metadata.display());
+    println!("Precompile: {precompile_name}");
     println!("Proof time: {:.3} s", proof_time.as_secs_f32());
     println!("Proof size: {proof_size_kib} KiB");
 

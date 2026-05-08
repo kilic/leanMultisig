@@ -8,7 +8,7 @@ use crate::{
         grammar::{ParsePair, Rule},
     },
 };
-use lean_vm::{CUSTOM_HINTS, ExtensionOpMode, POSEIDON16_NAME, SHA256_COMPRESS_NAME};
+use lean_vm::{CUSTOM_HINTS, ExtensionOpMode, POSEIDON16_NAME, SHA256_COMPRESS_NAME, SHA256_COMPRESS_RN_NAME};
 
 /// Reserved function names that users cannot define.
 pub const RESERVED_FUNCTION_NAMES: &[&str] = &[
@@ -34,7 +34,7 @@ fn is_reserved_function_name(name: &str) -> bool {
         return true;
     }
     // Check precompile names (poseidon16, sha256, extension_op functions)
-    if name == POSEIDON16_NAME || name == SHA256_COMPRESS_NAME {
+    if name == POSEIDON16_NAME || name == SHA256_COMPRESS_NAME || name == SHA256_COMPRESS_RN_NAME {
         return true;
     }
     if ExtensionOpMode::from_name(name).is_some() {

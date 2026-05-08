@@ -50,6 +50,7 @@ pub fn field_representation(instr: &Instruction) -> [F; N_INSTRUCTION_COLUMNS] {
             let precompile_data = match &precompile.data {
                 PrecompileCompTimeArgs::Poseidon16 => POSEIDON_PRECOMPILE_DATA,
                 PrecompileCompTimeArgs::Sha256Compress => SHA256_PRECOMPILE_DATA,
+                PrecompileCompTimeArgs::Sha256CompressRn => SHA256_RN_PRECOMPILE_DATA,
                 PrecompileCompTimeArgs::ExtensionOp { size, mode } => {
                     assert!(*size >= 1, "invalid extension_op size={size}");
                     mode.flag_encoding() + EXT_OP_LEN_MULTIPLIER * size

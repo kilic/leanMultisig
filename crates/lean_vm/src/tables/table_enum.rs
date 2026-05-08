@@ -3,12 +3,13 @@ use backend::*;
 use crate::execution::memory::MemoryAccess;
 use crate::*;
 
-pub const N_TABLES: usize = 4;
+pub const N_TABLES: usize = 5;
 pub const ALL_TABLES: [Table; N_TABLES] = [
     Table::execution(),
     Table::extension_op(),
     Table::poseidon16(),
     Table::sha256_compress(),
+    Table::sha256_compress_rn(),
 ];
 pub const MAX_PRECOMPILE_BUS_WIDTH: usize = 4;
 
@@ -19,6 +20,7 @@ pub enum Table {
     ExtensionOp(ExtensionOpPrecompile<true>),
     Poseidon16(Poseidon16Precompile<true>),
     Sha256Compress(Sha256CompressPrecompile<true>),
+    Sha256CompressRn(Sha256CompressRnPrecompile<true>),
 }
 
 #[macro_export]
@@ -29,6 +31,7 @@ macro_rules! delegate_to_inner {
             Self::ExtensionOp(p) => p.$method($($($arg),*)?),
             Self::Poseidon16(p) => p.$method($($($arg),*)?),
             Self::Sha256Compress(p) => p.$method($($($arg),*)?),
+            Self::Sha256CompressRn(p) => p.$method($($($arg),*)?),
             Self::Execution(p) => p.$method($($($arg),*)?),
         }
     };
@@ -38,6 +41,7 @@ macro_rules! delegate_to_inner {
             Table::ExtensionOp(p) => $macro_name!(p),
             Table::Poseidon16(p) => $macro_name!(p),
             Table::Sha256Compress(p) => $macro_name!(p),
+            Table::Sha256CompressRn(p) => $macro_name!(p),
             Table::Execution(p) => $macro_name!(p),
         }
     };
@@ -55,6 +59,9 @@ impl Table {
     }
     pub const fn sha256_compress() -> Self {
         Self::Sha256Compress(Sha256CompressPrecompile)
+    }
+    pub const fn sha256_compress_rn() -> Self {
+        Self::Sha256CompressRn(Sha256CompressRnPrecompile)
     }
     pub fn embed<PF: PrimeCharacteristicRing>(&self) -> PF {
         PF::from_usize(self.index())

@@ -7,7 +7,7 @@ use crate::diagnostics::RunnerError;
 use crate::execution::memory::MemoryAccess;
 use crate::tables::TableT;
 use crate::{ExtensionOpMode, Table, TableTrace};
-use crate::{POSEIDON16_NAME, SHA256_COMPRESS_NAME};
+use crate::{POSEIDON16_NAME, SHA256_COMPRESS_NAME, SHA256_COMPRESS_RN_NAME};
 use backend::*;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -65,6 +65,7 @@ pub struct PrecompileArgs<V, S> {
 pub enum PrecompileCompTimeArgs<S> {
     Poseidon16,
     Sha256Compress,
+    Sha256CompressRn,
     ExtensionOp { size: S, mode: ExtensionOpMode },
 }
 
@@ -73,6 +74,7 @@ impl<S> PrecompileCompTimeArgs<S> {
         match self {
             Self::Poseidon16 => Table::poseidon16(),
             Self::Sha256Compress => Table::sha256_compress(),
+            Self::Sha256CompressRn => Table::sha256_compress_rn(),
             Self::ExtensionOp { .. } => Table::extension_op(),
         }
     }
@@ -81,6 +83,7 @@ impl<S> PrecompileCompTimeArgs<S> {
         match self {
             Self::Poseidon16 => PrecompileCompTimeArgs::Poseidon16,
             Self::Sha256Compress => PrecompileCompTimeArgs::Sha256Compress,
+            Self::Sha256CompressRn => PrecompileCompTimeArgs::Sha256CompressRn,
             Self::ExtensionOp { size, mode } => PrecompileCompTimeArgs::ExtensionOp { size: f(size), mode },
         }
     }
@@ -244,6 +247,9 @@ impl<V: Display, S: Display> Display for PrecompileArgs<V, S> {
             }
             PrecompileCompTimeArgs::Sha256Compress => {
                 write!(f, "{SHA256_COMPRESS_NAME}({arg_0}, {arg_1}, {res})")
+            }
+            PrecompileCompTimeArgs::Sha256CompressRn => {
+                write!(f, "{SHA256_COMPRESS_RN_NAME}({arg_0}, {arg_1}, {res})")
             }
             PrecompileCompTimeArgs::ExtensionOp { size, mode } => {
                 write!(f, "{}({arg_0}, {arg_1}, {res}, {size})", mode.name())

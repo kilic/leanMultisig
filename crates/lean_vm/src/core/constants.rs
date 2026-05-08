@@ -21,13 +21,14 @@ pub const MIN_BYTECODE_LOG_SIZE: usize = 8;
 
 /// Minimum and maximum number of rows per table (as powers of two), both inclusive
 pub const MIN_LOG_N_ROWS_PER_TABLE: usize = 8; // Zero padding will be added to each at least, if this minimum is not reached, (ensuring AIR / GKR work fine, with SIMD, without too much edge cases). Long term, we should find a more elegant solution.
-pub const MAX_LOG_N_ROWS_PER_TABLE: [(Table, usize); 4] = [
+pub const MAX_LOG_N_ROWS_PER_TABLE: [(Table, usize); 5] = [
     (Table::execution(), 25),
     (Table::extension_op(), 20),
     (Table::poseidon16(), 21),
     // Direct Plonky3-style SHA256 has 7524 columns. 2^13 rows already exceeds
     // the current commitment-surface guard; 2^12 is the largest safe cap today.
     (Table::sha256_compress(), 12),
+    (Table::sha256_compress_rn(), 10),
 ];
 
 /// Starting program counter

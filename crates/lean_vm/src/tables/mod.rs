@@ -7,6 +7,9 @@ pub use poseidon_16::*;
 pub mod sha256_compress;
 pub use sha256_compress::*;
 
+pub mod sha256_compress_rn;
+pub use sha256_compress_rn::*;
+
 mod table_enum;
 pub use table_enum::*;
 
