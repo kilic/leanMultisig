@@ -92,11 +92,8 @@ fn verify_execution_inner(
         .unwrap_or_default();
 
     let stack_layout = compute_stack_layout(log_memory, bytecode.log_size(), &table_n_vars, &aux_layouts);
-    let parsed_commitment = stacked_pcs_parse_commitment(
-        &whir_config,
-        &mut verifier_state,
-        stack_layout.stacked_n_vars,
-    )?;
+    let parsed_commitment =
+        stacked_pcs_parse_commitment(&whir_config, &mut verifier_state, stack_layout.stacked_n_vars)?;
 
     let logup_c = verifier_state.sample();
     let logup_alphas = verifier_state.sample_vec(log2_ceil_usize(max_bus_width_including_domainsep()));
@@ -283,11 +280,7 @@ fn verify_execution_inner(
         );
     }
 
-    let global_statements_base = stacked_pcs_global_statements(
-        &stack_layout,
-        previous_statements,
-        per_section,
-    );
+    let global_statements_base = stacked_pcs_global_statements(&stack_layout, previous_statements, per_section);
 
     // sanity check (not necessary for soundness)
     let num_whir_statements = global_statements_base.iter().map(|s| s.values.len()).sum::<usize>();
