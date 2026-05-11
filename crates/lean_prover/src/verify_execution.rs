@@ -1,5 +1,9 @@
 use std::collections::BTreeMap;
 
+use crate::sha256_rn_fixed_lookups::{
+    SHA256_RN_RANGE_CHECK_ADD_STACKED_N_VARS, Sha256RnFixedLookupVerifierSetup, sha256_rn_add4_aux_trace_layout,
+    verify_sha256_rn_add4_fixed_lookup,
+};
 use crate::*;
 use backend::{Proof, RawProof, VerifierState};
 use lean_vm::*;
@@ -16,9 +20,30 @@ pub fn verify_execution(
     public_input: &[F],
     proof: Proof<F>,
 ) -> Result<(ProofVerificationDetails, RawProof<F>), ProofError> {
+    verify_execution_inner(bytecode, public_input, proof, None)
+}
+
+pub fn verify_execution_with_sha256_rn_fixed_lookups(
+    bytecode: &Bytecode,
+    public_input: &[F],
+    proof: Proof<F>,
+    fixed_lookups: &Sha256RnFixedLookupVerifierSetup,
+) -> Result<(ProofVerificationDetails, RawProof<F>), ProofError> {
+    verify_execution_inner(bytecode, public_input, proof, Some(fixed_lookups))
+}
+
+fn verify_execution_inner(
+    bytecode: &Bytecode,
+    public_input: &[F],
+    proof: Proof<F>,
+    sha256_rn_fixed_lookups: Option<&Sha256RnFixedLookupVerifierSetup>,
+) -> Result<(ProofVerificationDetails, RawProof<F>), ProofError> {
     let mut verifier_state = VerifierState::<EF, _>::new(proof, get_poseidon16().clone())?;
     verifier_state.observe_scalars(public_input);
     verifier_state.observe_scalars(&poseidon16_compress_pair(&bytecode.hash, &SNARK_DOMAIN_SEP));
+    if let Some(fixed_lookups) = sha256_rn_fixed_lookups {
+        verifier_state.observe_scalars(&fixed_lookups.transcript_scalars());
+    }
     let dims = verifier_state
         .next_base_scalars_vec(3 + N_TABLES)?
         .into_iter()
@@ -62,12 +87,15 @@ pub fn verify_execution(
         return Err(ProofError::InvalidProof);
     }
 
+    let aux_layouts = sha256_rn_fixed_lookups
+        .map(|_| vec![sha256_rn_add4_aux_trace_layout()])
+        .unwrap_or_default();
+
+    let stack_layout = compute_stack_layout(log_memory, bytecode.log_size(), &table_n_vars, &aux_layouts);
     let parsed_commitment = stacked_pcs_parse_commitment(
         &whir_config,
         &mut verifier_state,
-        log_memory,
-        bytecode.log_size(),
-        &table_n_vars,
+        stack_layout.stacked_n_vars,
     )?;
 
     let logup_c = verifier_state.sample();
@@ -96,6 +124,9 @@ pub fn verify_execution(
             )],
         );
     }
+
+    let mut aux_committed_statements: AuxCommittedStatements = vec![Vec::new(); aux_layouts.len()];
+    let mut setup_statements = Vec::new();
 
     let bus_beta = verifier_state.sample();
     let air_alpha = verifier_state.sample();
@@ -174,52 +205,112 @@ pub fn verify_execution(
         return Err(ProofError::InvalidProof);
     }
 
+    if sha256_rn_fixed_lookups.is_some() {
+        let add4_statements =
+            verify_sha256_rn_add4_fixed_lookup(&mut verifier_state, table_n_vars[&Table::sha256_compress_rn()])?;
+        committed_statements
+            .get_mut(&Table::sha256_compress_rn())
+            .unwrap()
+            .push((add4_statements.rn_claim.0, add4_statements.rn_claim.1, BTreeMap::new()));
+        aux_committed_statements[0].push(add4_statements.aux_claim);
+        setup_statements.extend(add4_statements.setup_statements);
+    }
+
     let public_memory_random_point =
         MultilinearPoint(verifier_state.sample_vec(log2_strict_usize(public_memory.len())));
     let public_memory_eval = public_memory.evaluate(&public_memory_random_point);
 
-    let previous_statements = vec![
+    let mut previous_statements = vec![
         SparseStatement::new(
-            parsed_commitment.num_variables,
+            stack_layout.stacked_n_vars,
             logup_statements.memory_and_acc_point,
             vec![
-                SparseValue::new(0, logup_statements.value_memory),
-                SparseValue::new(1, logup_statements.value_memory_acc),
+                SparseValue::new(
+                    stack_layout.sparse_selector(StackSectionId::Memory, 0),
+                    logup_statements.value_memory,
+                ),
+                SparseValue::new(
+                    stack_layout.sparse_selector(StackSectionId::Memory, 1),
+                    logup_statements.value_memory_acc,
+                ),
             ],
         ),
         SparseStatement::new(
-            parsed_commitment.num_variables,
+            stack_layout.stacked_n_vars,
             public_memory_random_point,
-            vec![SparseValue::new(0, public_memory_eval)],
+            vec![SparseValue::new(
+                stack_layout.sparse_selector_at_point_len(
+                    StackSectionId::Memory,
+                    0,
+                    log2_strict_usize(public_memory.len()),
+                ),
+                public_memory_eval,
+            )],
         ),
         SparseStatement::new(
-            parsed_commitment.num_variables,
+            stack_layout.stacked_n_vars,
             logup_statements.bytecode_and_acc_point,
             vec![SparseValue::new(
-                (2 << log_memory) >> bytecode.log_size(),
+                stack_layout.sparse_selector(StackSectionId::BytecodeAcc, 0),
                 logup_statements.value_bytecode_acc,
             )],
         ),
     ];
+    let exec_id = StackSectionId::VmTable(Table::execution());
+    let exec_n_vars = table_n_vars[&Table::execution()];
+    previous_statements.push(SparseStatement::unique_value(
+        stack_layout.stacked_n_vars,
+        stack_layout.absolute_index(exec_id, COL_PC, 0),
+        EF::from_usize(STARTING_PC),
+    ));
+    previous_statements.push(SparseStatement::unique_value(
+        stack_layout.stacked_n_vars,
+        stack_layout.absolute_index(exec_id, COL_PC, (1 << exec_n_vars) - 1),
+        EF::from_usize(ENDING_PC),
+    ));
+
+    let mut per_section: BTreeMap<StackSectionId, Vec<_>> = BTreeMap::new();
+    for (table, statements) in &committed_statements {
+        per_section.insert(StackSectionId::VmTable(*table), statements.clone());
+    }
+    for (descriptor, statements) in aux_layouts.iter().zip(aux_committed_statements.iter()) {
+        per_section.insert(
+            descriptor.id,
+            statements
+                .iter()
+                .map(|(point, eq_values)| (point.clone(), eq_values.clone(), BTreeMap::new()))
+                .collect(),
+        );
+    }
 
     let global_statements_base = stacked_pcs_global_statements(
-        parsed_commitment.num_variables,
-        log_memory,
-        bytecode.log_size(),
+        &stack_layout,
         previous_statements,
-        &table_n_vars,
-        &committed_statements,
+        per_section,
     );
 
     // sanity check (not necessary for soundness)
     let num_whir_statements = global_statements_base.iter().map(|s| s.values.len()).sum::<usize>();
-    assert_eq!(num_whir_statements, total_whir_statements());
+    if aux_layouts.is_empty() {
+        assert_eq!(num_whir_statements, total_whir_statements(&[]));
+    }
 
     WhirConfig::new(&whir_config, parsed_commitment.num_variables).verify(
         &mut verifier_state,
         &parsed_commitment,
         global_statements_base,
     )?;
+
+    if let Some(fixed_lookups) = sha256_rn_fixed_lookups {
+        if fixed_lookups.range_check_add.stacked_n_vars != SHA256_RN_RANGE_CHECK_ADD_STACKED_N_VARS {
+            return Err(ProofError::InvalidProof);
+        }
+        WhirConfig::new(&whir_config, fixed_lookups.range_check_add.stacked_n_vars).verify(
+            &mut verifier_state,
+            &fixed_lookups.range_check_add.parsed_commitment(),
+            setup_statements,
+        )?;
+    }
 
     Ok((
         ProofVerificationDetails {

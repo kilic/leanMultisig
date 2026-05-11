@@ -1,4 +1,9 @@
-use crate::{default_whir_config, prove_execution::prove_execution, verify_execution::verify_execution};
+use crate::{
+    default_whir_config,
+    prove_execution::{prove_execution, prove_execution_with_sha256_rn_fixed_lookups},
+    sha256_rn_fixed_lookups::setup_sha256_rn_fixed_lookups,
+    verify_execution::{verify_execution, verify_execution_with_sha256_rn_fixed_lookups},
+};
 use backend::*;
 use lean_compiler::*;
 use lean_vm::*;
@@ -122,6 +127,51 @@ def main():
     println!("Proof size: {proof_size_kib} KiB");
 
     verify_execution(&bytecode, &public_input, proof.proof).unwrap();
+}
+
+#[test]
+fn test_sha256_rn_fixed_lookup_setup_binds_transcript() {
+    utils::init_tracing();
+    const SHA_FIXTURE_STRIDE: usize = SHA256_STATE_LIMBS + SHA256_BLOCK_LIMBS + SHA256_STATE_LIMBS;
+    let program_str = r#"
+def main():
+    state = 0
+    block = 16
+    expected = 48
+    out = Array(16)
+    sha256_compress_rn(state, block, out)
+
+    for i in unroll(0, 16):
+        assert out[i] == expected[i]
+    return
+"#;
+
+    let mut public_input = vec![F::ZERO; SHA_FIXTURE_STRIDE];
+    public_input[..SHA256_STATE_LIMBS].copy_from_slice(&words_to_field_limbs_le(SHA256_IV));
+    public_input[16..16 + SHA256_BLOCK_LIMBS].copy_from_slice(&words_to_field_limbs_le(SHA256_ABC_BLOCK));
+    let expected = words_to_field_limbs_le(sha256_compress_words(SHA256_IV, SHA256_ABC_BLOCK));
+    public_input[48..48 + SHA256_STATE_LIMBS].copy_from_slice(&expected);
+
+    let bytecode = compile_program(&ProgramSource::Raw(program_str.to_string()));
+    let witness = ExecutionWitness::default();
+    let whir_config = default_whir_config(1);
+    let setup = setup_sha256_rn_fixed_lookups(&whir_config);
+    let proof =
+        prove_execution_with_sha256_rn_fixed_lookups(&bytecode, &public_input, &witness, &whir_config, false, &setup);
+
+    verify_execution_with_sha256_rn_fixed_lookups(
+        &bytecode,
+        &public_input,
+        proof.proof.clone(),
+        setup.verifier_setup(),
+    )
+    .unwrap();
+
+    let mut tampered_setup = setup.verifier_setup().clone();
+    tampered_setup.range_check_add.root[0] += F::ONE;
+    assert!(
+        verify_execution_with_sha256_rn_fixed_lookups(&bytecode, &public_input, proof.proof, &tampered_setup).is_err()
+    );
 }
 
 #[test]

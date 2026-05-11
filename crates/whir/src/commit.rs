@@ -67,6 +67,16 @@ where
         polynomial: &MleOwned<EF>,
         actual_data_len: usize, // polynomial[actual_data_len..] is zero
     ) -> Witness<EF> {
+        self.commit_with_root(prover_state, polynomial, actual_data_len).0
+    }
+
+    #[instrument(skip_all)]
+    pub fn commit_with_root(
+        &self,
+        prover_state: &mut impl FSProver<EF>,
+        polynomial: &MleOwned<EF>,
+        actual_data_len: usize, // polynomial[actual_data_len..] is zero
+    ) -> (Witness<EF>, [PF<EF>; DIGEST_ELEMS]) {
         let n_blocks = 1usize << self.folding_factor.at_round(0);
         let evals_len = 1usize << self.num_variables;
         let effective_n_cols = actual_data_len.div_ceil(evals_len / n_blocks);
@@ -91,10 +101,11 @@ where
                 polynomial.evaluate(point)
             });
 
-        Witness {
+        let witness = Witness {
             prover_data,
             ood_points,
             ood_answers,
-        }
+        };
+        (witness, root)
     }
 }

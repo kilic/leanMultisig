@@ -1,33 +1,15 @@
 use backend::*;
-use lean_vm::{
-    ALL_TABLES, COL_PC, CommittedStatements, ENDING_PC, MIN_LOG_MEMORY_SIZE, MIN_LOG_N_ROWS_PER_TABLE,
-    N_INSTRUCTION_COLUMNS, STARTING_PC, sort_tables_by_height,
-};
-use lean_vm::{EF, F, Table, TableT, TableTrace};
-use std::collections::BTreeMap;
+use lean_vm::{ALL_TABLES, MIN_LOG_MEMORY_SIZE, MIN_LOG_N_ROWS_PER_TABLE, N_INSTRUCTION_COLUMNS};
+use lean_vm::{ColIndex, EF, F, Table, TableT, TableTrace};
+use std::{collections::BTreeMap, fmt};
 use tracing::instrument;
 use utils::VarCount;
 use utils::ansi::Colorize;
 
 /*
-Stacking of various (multilinear) polynomials into a single -big- (multilinear) polynomial, which is committed via WHIR.
-[------------------------------ Memory ------------------------------]
-[------------------------ Memory Accumulator ------------------------]
-[------ Bytecode Accumulator -----]                             (padded to bas as least as large as the execution table)
-[-------- Execution Col 0 --------]
-[-------- Execution Col 1 --------]
-...
-[-------- Execution Col 19 -------]
-[Dot-Product Col 0]
-[Dot-Product Col 1]
-...
-[Dot-Product Col n]
-[Poseidon-16 Col 0]
-[Poseidon-16 Col 1]
-...
-[Poseidon-16 Col m]
-
-(The order between Dot-Product and Poseidon-16 varies based on which table has more rows, but they are always after the execution table)
+Stacking of various multilinear polynomials into a single global polynomial, committed via WHIR.
+Sections are tightly packed by column and sorted by descending row height. This preserves the sparse
+opening invariant that each section offset is divisible by its row height.
 */
 
 #[derive(Debug)]
@@ -35,63 +17,147 @@ pub struct StackedPcsWitness {
     pub stacked_n_vars: VarCount,
     pub inner_witness: Witness<EF>,
     pub global_polynomial: MleOwned<EF>,
+    pub layout: StackLayout,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum StackSectionId {
+    Memory,
+    BytecodeAcc,
+    VmTable(Table),
+    Aux(&'static str),
+}
+
+impl fmt::Display for StackSectionId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Memory => write!(f, "memory"),
+            Self::BytecodeAcc => write!(f, "bytecode_acc"),
+            Self::VmTable(table) => write!(f, "{}", table.name()),
+            Self::Aux(label) => write!(f, "{label}"),
+        }
+    }
+}
+
+struct StackSectionData<'a> {
+    id: StackSectionId,
+    log_n_rows: VarCount,
+    columns: Vec<&'a [F]>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StackLayout {
+    pub stacked_n_vars: VarCount,
+    pub actual_data_len: usize,
+    pub sections: Vec<StackSectionLayout>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StackSectionLayout {
+    pub id: StackSectionId,
+    pub log_n_rows: VarCount,
+    pub n_columns: usize,
+    pub offset: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct AuxTrace {
+    pub label: &'static str,
+    pub log_n_rows: VarCount,
+    pub columns: Vec<Vec<F>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StackSectionDescriptor {
+    pub id: StackSectionId,
+    pub log_n_rows: VarCount,
+    pub n_columns: usize,
+}
+
+pub type AuxCommittedStatements = Vec<Vec<(MultilinearPoint<EF>, BTreeMap<ColIndex, EF>)>>;
+
+impl StackLayout {
+    pub fn section(&self, id: StackSectionId) -> &StackSectionLayout {
+        self.sections
+            .iter()
+            .find(|section| section.id == id)
+            .unwrap_or_else(|| panic!("missing stack section: {id:?}"))
+    }
+
+    pub fn sparse_selector(&self, id: StackSectionId, col_index: usize) -> usize {
+        let section = self.section(id);
+        assert!(col_index < section.n_columns);
+        assert!(section.offset.is_multiple_of(1 << section.log_n_rows));
+        (section.offset >> section.log_n_rows) + col_index
+    }
+
+    pub fn sparse_selector_at_point_len(&self, id: StackSectionId, col_index: usize, point_n_vars: usize) -> usize {
+        let section = self.section(id);
+        assert!(col_index < section.n_columns);
+        assert!(point_n_vars <= section.log_n_rows);
+        let column_offset = section.offset + (col_index << section.log_n_rows);
+        assert!(column_offset.is_multiple_of(1 << point_n_vars));
+        column_offset >> point_n_vars
+    }
+
+    pub fn absolute_index(&self, id: StackSectionId, col_index: usize, row_index: usize) -> usize {
+        let section = self.section(id);
+        assert!(col_index < section.n_columns);
+        assert!(row_index < 1 << section.log_n_rows);
+        section.offset + (col_index << section.log_n_rows) + row_index
+    }
+
+    pub fn display(&self) -> String {
+        let sections = self
+            .sections
+            .iter()
+            .map(|section| {
+                let size = section.n_columns << section.log_n_rows;
+                format!(
+                    "{}: rows=2^{}, cols={}, size={}, offset={}",
+                    section.id, section.log_n_rows, section.n_columns, size, section.offset
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" | ");
+        format!("stacked PCS layout: {sections}")
+    }
 }
 
 pub fn stacked_pcs_global_statements(
-    stacked_n_vars: VarCount,
-    memory_n_vars: VarCount,
-    bytecode_n_vars: VarCount,
+    layout: &StackLayout,
     previous_statements: Vec<SparseStatement<EF>>,
-    tables_heights: &BTreeMap<Table, VarCount>,
-    committed_statements: &CommittedStatements,
+    per_section: BTreeMap<StackSectionId, Vec<(MultilinearPoint<EF>, BTreeMap<ColIndex, EF>, BTreeMap<ColIndex, EF>)>>,
 ) -> Vec<SparseStatement<EF>> {
-    assert_eq!(tables_heights.len(), committed_statements.len());
-
-    let tables_heights_sorted = sort_tables_by_height(tables_heights);
-
-    let mut global_statements = previous_statements;
-    let mut offset = 2 << memory_n_vars; // memory + memory_acc
-
-    let max_table_n_vars = tables_heights_sorted[0].1;
-    offset += 1 << bytecode_n_vars.max(max_table_n_vars); // bytecode acc
-
-    for (table, n_vars) in tables_heights_sorted {
-        if table.is_execution_table() {
-            // Important: ensure both initial and final PC conditions are correct
-            global_statements.push(SparseStatement::unique_value(
-                stacked_n_vars,
-                offset + (COL_PC << n_vars),
-                EF::from_usize(STARTING_PC),
-            ));
-            global_statements.push(SparseStatement::unique_value(
-                stacked_n_vars,
-                offset + ((COL_PC + 1) << n_vars) - 1,
-                EF::from_usize(ENDING_PC),
-            ));
-        }
-        for (point, eq_values, next_values) in &committed_statements[&table] {
+    let mut out = previous_statements;
+    for section in &layout.sections {
+        let Some(statements) = per_section.get(&section.id) else {
+            continue;
+        };
+        for (point, eq_values, next_values) in statements {
             if !next_values.is_empty() {
-                global_statements.push(SparseStatement::new_next(
-                    stacked_n_vars,
+                out.push(SparseStatement::new_next(
+                    layout.stacked_n_vars,
                     point.clone(),
                     next_values
                         .iter()
-                        .map(|(&col_index, &value)| SparseValue::new((offset >> n_vars) + col_index, value))
+                        .map(|(&col_index, &value)| {
+                            SparseValue::new(layout.sparse_selector(section.id, col_index), value)
+                        })
                         .collect(),
                 ));
             }
-            global_statements.push(SparseStatement::new(
-                stacked_n_vars,
+            out.push(SparseStatement::new(
+                layout.stacked_n_vars,
                 point.clone(),
                 eq_values
                     .iter()
-                    .map(|(&col_index, &value)| SparseValue::new((offset >> n_vars) + col_index, value))
+                    .map(|(&col_index, &value)| SparseValue::new(layout.sparse_selector(section.id, col_index), value))
                     .collect(),
             ));
         }
-        offset += table.n_columns() << n_vars;
     }
-    global_statements
+    out
 }
 
 #[instrument(skip_all)]
@@ -102,75 +168,46 @@ pub fn stack_polynomials_and_commit(
     memory_acc: &[F],
     bytecode_acc: &[F],
     traces: &BTreeMap<Table, TableTrace>,
+    aux_traces: &[AuxTrace],
 ) -> StackedPcsWitness {
     assert_eq!(memory.len(), memory_acc.len());
-    let tables_heights = traces.iter().map(|(table, trace)| (*table, trace.log_n_rows)).collect();
-    let tables_heights_sorted = sort_tables_by_height(&tables_heights);
-    assert!(log2_strict_usize(memory.len()) >= tables_heights[&Table::execution()]); // memory must be at least as large as the number of cycles (TODO add some padding when this is not the case)
-    assert!(tables_heights[&Table::execution()] >= tables_heights_sorted[0].1); // execution table must be the largest table (TODO add some padding when this is not the case)
+    assert_eq!(1 << log2_strict_usize(memory.len()), memory.len());
+    assert_eq!(1 << log2_strict_usize(bytecode_acc.len()), bytecode_acc.len());
 
-    let stacked_n_vars = compute_stacked_n_vars(
-        log2_strict_usize(memory.len()),
-        log2_strict_usize(bytecode_acc.len()),
-        &tables_heights_sorted.iter().cloned().collect(),
-    );
-    let mut global_polynomial = F::zero_vec(1 << stacked_n_vars); // TODO avoid cloning all witness data
-    global_polynomial[..memory.len()].copy_from_slice(memory);
-    let mut offset = memory.len();
-    global_polynomial[offset..][..memory_acc.len()].copy_from_slice(memory_acc);
-    offset += memory_acc.len();
-
-    global_polynomial[offset..][..bytecode_acc.len()].copy_from_slice(bytecode_acc);
-    let largest_table_height = 1 << tables_heights_sorted[0].1;
-    offset += largest_table_height.max(bytecode_acc.len()); // we may pad bytecode_acc to match largest table height
-
-    for (table, log_n_rows) in &tables_heights_sorted {
-        let n_rows = 1 << *log_n_rows;
-        for col_index in 0..table.n_columns() {
-            let col = &traces[table].columns[col_index];
-            global_polynomial[offset..][..n_rows].copy_from_slice(&col[..n_rows]);
-            offset += n_rows;
-        }
-    }
-    assert_eq!(log2_ceil_usize(offset), stacked_n_vars);
+    let sections = stack_sections(memory, memory_acc, bytecode_acc, traces, aux_traces);
+    let (layout, global_polynomial) = stack_section_polynomials(&sections);
+    tracing::info!("{}", layout.display().green());
     tracing::info!(
         "{}",
         format!(
             "stacked PCS data: {} = 2^{} * (1 + {:.2})",
-            offset,
-            stacked_n_vars - 1,
-            (offset as f64) / (1 << (stacked_n_vars - 1)) as f64 - 1.0
+            layout.actual_data_len,
+            layout.stacked_n_vars - 1,
+            (layout.actual_data_len as f64) / (1 << (layout.stacked_n_vars - 1)) as f64 - 1.0
         )
         .green()
     );
 
     let global_polynomial = MleOwned::Base(global_polynomial);
 
-    let inner_witness =
-        WhirConfig::new(whir_config_builder, stacked_n_vars).commit(prover_state, &global_polynomial, offset);
+    let inner_witness = WhirConfig::new(whir_config_builder, layout.stacked_n_vars).commit(
+        prover_state,
+        &global_polynomial,
+        layout.actual_data_len,
+    );
     StackedPcsWitness {
-        stacked_n_vars,
+        stacked_n_vars: layout.stacked_n_vars,
         inner_witness,
         global_polynomial,
+        layout,
     }
 }
 
 pub fn stacked_pcs_parse_commitment(
     whir_config_builder: &WhirConfigBuilder,
     verifier_state: &mut impl FSVerifier<EF>,
-    log_memory: usize,
-    log_bytecode: usize,
-    tables_heights: &BTreeMap<Table, VarCount>,
+    stacked_n_vars: VarCount,
 ) -> Result<ParsedCommitment<F, EF>, ProofError> {
-    if log_memory < tables_heights[&Table::execution()]
-        || tables_heights[&Table::execution()] < tables_heights.values().copied().max().unwrap()
-    {
-        // memory must be at least as large as the number of cycles
-        // execution table must be the largest table
-        return Err(ProofError::InvalidProof);
-    }
-
-    let stacked_n_vars = compute_stacked_n_vars(log_memory, log_bytecode, tables_heights);
     if stacked_n_vars
         > F::TWO_ADICITY + whir_config_builder.folding_factor.at_round(0) - whir_config_builder.starting_log_inv_rate
     {
@@ -179,19 +216,133 @@ pub fn stacked_pcs_parse_commitment(
     WhirConfig::new(whir_config_builder, stacked_n_vars).parse_commitment(verifier_state)
 }
 
-fn compute_stacked_n_vars(
+pub fn compute_stack_layout(
     log_memory: usize,
     log_bytecode: usize,
     tables_log_heights: &BTreeMap<Table, VarCount>,
-) -> VarCount {
-    let max_table_log_n_rows = tables_log_heights.values().copied().max().unwrap();
-    let total_len = (2 << log_memory)
-        + (1 << log_bytecode.max(max_table_log_n_rows))
-        + tables_log_heights
+    aux_layouts: &[StackSectionDescriptor],
+) -> StackLayout {
+    assert!(
+        aux_layouts
             .iter()
-            .map(|(table, log_n_rows)| table.n_columns() << log_n_rows)
-            .sum::<usize>();
-    log2_ceil_usize(total_len)
+            .all(|layout| matches!(layout.id, StackSectionId::Aux(_)))
+    );
+    let mut sections = vec![
+        StackSectionLayout {
+            id: StackSectionId::Memory,
+            log_n_rows: log_memory,
+            n_columns: 2,
+            offset: 0,
+        },
+        StackSectionLayout {
+            id: StackSectionId::BytecodeAcc,
+            log_n_rows: log_bytecode,
+            n_columns: 1,
+            offset: 0,
+        },
+    ];
+    sections.extend(
+        tables_log_heights
+            .iter()
+            .map(|(&table, &log_n_rows)| StackSectionLayout {
+                id: StackSectionId::VmTable(table),
+                log_n_rows,
+                n_columns: table.n_columns(),
+                offset: 0,
+            }),
+    );
+    sections.extend(aux_layouts.iter().map(|layout| StackSectionLayout {
+        id: layout.id,
+        log_n_rows: layout.log_n_rows,
+        n_columns: layout.n_columns,
+        offset: 0,
+    }));
+    finalize_stack_layout(sections)
+}
+
+fn finalize_stack_layout(mut sections: Vec<StackSectionLayout>) -> StackLayout {
+    sections.sort_by_key(|section| (std::cmp::Reverse(section.log_n_rows), section.id));
+
+    let mut offset = 0usize;
+    for section in &mut sections {
+        debug_assert!(offset.is_multiple_of(1usize << section.log_n_rows));
+        section.offset = offset;
+        offset += section.n_columns << section.log_n_rows;
+    }
+    StackLayout {
+        stacked_n_vars: log2_ceil_usize(offset),
+        actual_data_len: offset,
+        sections,
+    }
+}
+
+fn stack_sections<'a>(
+    memory: &'a [F],
+    memory_acc: &'a [F],
+    bytecode_acc: &'a [F],
+    traces: &'a BTreeMap<Table, TableTrace>,
+    aux_traces: &'a [AuxTrace],
+) -> Vec<StackSectionData<'a>> {
+    let mut sections = vec![
+        StackSectionData {
+            id: StackSectionId::Memory,
+            log_n_rows: log2_strict_usize(memory.len()),
+            columns: vec![memory, memory_acc],
+        },
+        StackSectionData {
+            id: StackSectionId::BytecodeAcc,
+            log_n_rows: log2_strict_usize(bytecode_acc.len()),
+            columns: vec![bytecode_acc],
+        },
+    ];
+    sections.extend(traces.iter().map(|(&table, trace)| StackSectionData {
+        id: StackSectionId::VmTable(table),
+        log_n_rows: trace.log_n_rows,
+        columns: trace.columns[..table.n_columns()].iter().map(Vec::as_slice).collect(),
+    }));
+    sections.extend(aux_traces.iter().map(|trace| StackSectionData {
+        id: StackSectionId::Aux(trace.label),
+        log_n_rows: trace.log_n_rows,
+        columns: trace.columns.iter().map(Vec::as_slice).collect(),
+    }));
+    sections
+}
+
+fn stack_section_polynomials(sections: &[StackSectionData<'_>]) -> (StackLayout, Vec<F>) {
+    let section_layouts = sections
+        .iter()
+        .map(|section| StackSectionLayout {
+            id: section.id,
+            log_n_rows: section.log_n_rows,
+            n_columns: section.columns.len(),
+            offset: 0,
+        })
+        .collect::<Vec<_>>();
+    let layout = finalize_stack_layout(section_layouts);
+
+    let mut global_polynomial = F::zero_vec(1 << layout.stacked_n_vars);
+    for section_layout in &layout.sections {
+        let section = sections.iter().find(|section| section.id == section_layout.id).unwrap();
+        let n_rows = 1 << section_layout.log_n_rows;
+        assert_eq!(section.columns.len(), section_layout.n_columns);
+        for (col_index, col) in section.columns.iter().enumerate() {
+            assert_eq!(col.len(), n_rows);
+            let start = section_layout.offset + (col_index << section_layout.log_n_rows);
+            global_polynomial[start..start + n_rows].copy_from_slice(col);
+        }
+    }
+
+    (layout, global_polynomial)
+}
+
+impl From<&AuxTrace> for StackSectionDescriptor {
+    fn from(trace: &AuxTrace) -> Self {
+        Self {
+            id: StackSectionId::Aux(trace.label),
+            log_n_rows: trace.log_n_rows,
+            n_columns: trace.columns.len(),
+        }
+    }
 }
 
 pub fn min_stacked_n_vars(log_bytecode: usize) -> usize {
@@ -199,10 +350,15 @@ pub fn min_stacked_n_vars(log_bytecode: usize) -> usize {
     for table in ALL_TABLES {
         min_tables_log_heights.insert(table, MIN_LOG_N_ROWS_PER_TABLE);
     }
-    compute_stacked_n_vars(MIN_LOG_MEMORY_SIZE, log_bytecode, &min_tables_log_heights)
+    compute_stack_layout(MIN_LOG_MEMORY_SIZE, log_bytecode, &min_tables_log_heights, &[]).stacked_n_vars
 }
 
-pub fn total_whir_statements() -> usize {
+pub fn total_whir_statements(aux_layouts: &[StackSectionDescriptor]) -> usize {
+    assert!(
+        aux_layouts
+            .iter()
+            .all(|layout| matches!(layout.id, StackSectionId::Aux(_)))
+    );
     6 // memory + memory_acc + public_memory + bytecode_acc + pc_start + pc_end
      + ALL_TABLES
         .iter()
@@ -217,4 +373,85 @@ pub fn total_whir_statements() -> usize {
         // bytecode lookup
         + 1 // PC
         + N_INSTRUCTION_COLUMNS
+        + aux_layouts.iter().map(|layout| layout.n_columns).sum::<usize>()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn range_col(start: usize, len: usize) -> Vec<F> {
+        (start..start + len).map(F::from_usize).collect()
+    }
+
+    #[test]
+    fn stack_layout_sorts_sections_by_height_and_preserves_alignment() {
+        let mut table_heights = BTreeMap::new();
+        table_heights.insert(Table::execution(), 8);
+        table_heights.insert(Table::poseidon16(), 10);
+        table_heights.insert(Table::extension_op(), 7);
+        let aux_layouts = [StackSectionDescriptor {
+            id: StackSectionId::Aux("aux"),
+            log_n_rows: 9,
+            n_columns: 1,
+        }];
+
+        let layout = compute_stack_layout(6, 5, &table_heights, &aux_layouts);
+        let heights = layout
+            .sections
+            .iter()
+            .map(|section| section.log_n_rows)
+            .collect::<Vec<_>>();
+        assert!(heights.windows(2).all(|pair| pair[0] >= pair[1]));
+        for section in &layout.sections {
+            assert!(section.offset.is_multiple_of(1 << section.log_n_rows));
+        }
+    }
+
+    #[test]
+    fn stacked_sections_sparse_selectors_open_expected_columns() {
+        let memory = range_col(0, 8);
+        let memory_acc = range_col(100, 8);
+        let bytecode_acc = range_col(200, 4);
+        let aux = range_col(300, 16);
+        let sections = vec![
+            StackSectionData {
+                id: StackSectionId::Memory,
+                log_n_rows: 3,
+                columns: vec![&memory, &memory_acc],
+            },
+            StackSectionData {
+                id: StackSectionId::BytecodeAcc,
+                log_n_rows: 2,
+                columns: vec![&bytecode_acc],
+            },
+            StackSectionData {
+                id: StackSectionId::Aux("aux"),
+                log_n_rows: 4,
+                columns: vec![&aux],
+            },
+        ];
+
+        let (layout, global) = stack_section_polynomials(&sections);
+        let zero_point_4 = MultilinearPoint(vec![EF::ZERO; 4]);
+        let zero_point_3 = MultilinearPoint(vec![EF::ZERO; 3]);
+        let zero_point_2 = MultilinearPoint(vec![EF::ZERO; 2]);
+
+        assert_eq!(
+            global.evaluate_sparse(layout.sparse_selector(StackSectionId::Aux("aux"), 0), &zero_point_4),
+            EF::from(aux[0])
+        );
+        assert_eq!(
+            global.evaluate_sparse(layout.sparse_selector(StackSectionId::Memory, 0), &zero_point_3),
+            EF::from(memory[0])
+        );
+        assert_eq!(
+            global.evaluate_sparse(layout.sparse_selector(StackSectionId::Memory, 1), &zero_point_3),
+            EF::from(memory_acc[0])
+        );
+        assert_eq!(
+            global.evaluate_sparse(layout.sparse_selector(StackSectionId::BytecodeAcc, 0), &zero_point_2,),
+            EF::from(bytecode_acc[0])
+        );
+    }
 }

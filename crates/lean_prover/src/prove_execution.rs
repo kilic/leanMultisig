@@ -1,5 +1,9 @@
 use std::collections::BTreeMap;
 
+use crate::sha256_rn_fixed_lookups::{
+    SHA256_RN_RANGE_CHECK_ADD_STACKED_N_VARS, Sha256RnFixedLookupProverSetup, build_sha256_rn_add4_carry_4_mult_trace,
+    prove_sha256_rn_add4_fixed_lookup,
+};
 use crate::*;
 use lean_vm::*;
 
@@ -21,6 +25,35 @@ pub fn prove_execution(
     whir_config: &WhirConfigBuilder,
     vm_profiler: bool,
 ) -> ExecutionProof {
+    prove_execution_inner(bytecode, public_input, witness, whir_config, vm_profiler, None)
+}
+
+pub fn prove_execution_with_sha256_rn_fixed_lookups(
+    bytecode: &Bytecode,
+    public_input: &[F],
+    witness: &ExecutionWitness,
+    whir_config: &WhirConfigBuilder,
+    vm_profiler: bool,
+    fixed_lookups: &Sha256RnFixedLookupProverSetup,
+) -> ExecutionProof {
+    prove_execution_inner(
+        bytecode,
+        public_input,
+        witness,
+        whir_config,
+        vm_profiler,
+        Some(fixed_lookups),
+    )
+}
+
+fn prove_execution_inner(
+    bytecode: &Bytecode,
+    public_input: &[F],
+    witness: &ExecutionWitness,
+    whir_config: &WhirConfigBuilder,
+    vm_profiler: bool,
+    sha256_rn_fixed_lookups: Option<&Sha256RnFixedLookupProverSetup>,
+) -> ExecutionProof {
     check_rate(whir_config.starting_log_inv_rate)
         .map_err(|err| panic!("{err}"))
         .unwrap();
@@ -35,8 +68,9 @@ pub fn prove_execution(
         info_span!("Building execution trace").in_scope(|| get_execution_trace(bytecode, execution_result))
     });
 
-    // Memory must be at least MIN_LOG_MEMORY_SIZE and at least bytecode size
-    // (required by the stacked polynomial ordering)
+    // Memory must be at least MIN_LOG_MEMORY_SIZE and at least bytecode size.
+    // Generic logup still keeps the current memory/bytecode sizing assumptions;
+    // aux traces are independent stack sections and do not force memory padding.
     let min_memory_size = (1 << MIN_LOG_MEMORY_SIZE).max(1 << bytecode.log_size());
     if memory.len() < min_memory_size {
         memory.resize(min_memory_size, F::ZERO);
@@ -44,6 +78,9 @@ pub fn prove_execution(
     let mut prover_state = build_prover_state();
     prover_state.observe_scalars(public_input);
     prover_state.observe_scalars(&poseidon16_compress_pair(&bytecode.hash, &SNARK_DOMAIN_SEP));
+    if let Some(fixed_lookups) = sha256_rn_fixed_lookups {
+        prover_state.observe_scalars(&fixed_lookups.verifier_setup().transcript_scalars());
+    }
     prover_state.add_base_scalars(
         &[
             vec![
@@ -93,6 +130,11 @@ pub fn prove_execution(
         }
     });
 
+    let aux_traces = sha256_rn_fixed_lookups
+        .map(|_| vec![build_sha256_rn_add4_carry_4_mult_trace(&traces)])
+        .unwrap_or_default();
+    let aux_layouts = aux_traces.iter().map(StackSectionDescriptor::from).collect::<Vec<_>>();
+
     // 1st Commitment
     let stacked_pcs_witness = stack_polynomials_and_commit(
         &mut prover_state,
@@ -101,6 +143,7 @@ pub fn prove_execution(
         &memory_acc,
         &bytecode_acc,
         &traces,
+        &aux_traces,
     );
 
     // logup (GKR)
@@ -131,6 +174,9 @@ pub fn prove_execution(
             )],
         );
     }
+
+    let mut aux_committed_statements: AuxCommittedStatements = vec![Vec::new(); aux_layouts.len()];
+    let mut setup_statements = Vec::new();
 
     let bus_beta = prover_state.sample();
     let air_alpha = prover_state.sample();
@@ -203,41 +249,85 @@ pub fn prove_execution(
         committed_statements.get_mut(table).unwrap().push(claim);
     }
 
+    if let Some(fixed_lookups) = sha256_rn_fixed_lookups {
+        let add4_statements =
+            prove_sha256_rn_add4_fixed_lookup(&mut prover_state, &traces, &aux_traces[0], fixed_lookups);
+        committed_statements
+            .get_mut(&Table::sha256_compress_rn())
+            .unwrap()
+            .push((add4_statements.rn_claim.0, add4_statements.rn_claim.1, BTreeMap::new()));
+        aux_committed_statements[0].push(add4_statements.aux_claim);
+        setup_statements.extend(add4_statements.setup_statements);
+    }
+
     let public_memory_random_point = MultilinearPoint(prover_state.sample_vec(log2_strict_usize(public_memory_size)));
     let public_memory_eval = (&memory[..public_memory_size]).evaluate(&public_memory_random_point);
+    let stack_layout = &stacked_pcs_witness.layout;
 
-    let previous_statements = vec![
+    let mut previous_statements = vec![
         SparseStatement::new(
-            stacked_pcs_witness.stacked_n_vars,
+            stack_layout.stacked_n_vars,
             logup_statements.memory_and_acc_point,
             vec![
-                SparseValue::new(0, logup_statements.value_memory),
-                SparseValue::new(1, logup_statements.value_memory_acc),
+                SparseValue::new(
+                    stack_layout.sparse_selector(StackSectionId::Memory, 0),
+                    logup_statements.value_memory,
+                ),
+                SparseValue::new(
+                    stack_layout.sparse_selector(StackSectionId::Memory, 1),
+                    logup_statements.value_memory_acc,
+                ),
             ],
         ),
         SparseStatement::new(
-            stacked_pcs_witness.stacked_n_vars,
+            stack_layout.stacked_n_vars,
             public_memory_random_point,
-            vec![SparseValue::new(0, public_memory_eval)],
+            vec![SparseValue::new(
+                stack_layout.sparse_selector_at_point_len(
+                    StackSectionId::Memory,
+                    0,
+                    log2_strict_usize(public_memory_size),
+                ),
+                public_memory_eval,
+            )],
         ),
         SparseStatement::new(
-            stacked_pcs_witness.stacked_n_vars,
+            stack_layout.stacked_n_vars,
             logup_statements.bytecode_and_acc_point,
             vec![SparseValue::new(
-                (2 * memory.len()) >> bytecode.log_size(),
+                stack_layout.sparse_selector(StackSectionId::BytecodeAcc, 0),
                 logup_statements.value_bytecode_acc,
             )],
         ),
     ];
+    let exec_id = StackSectionId::VmTable(Table::execution());
+    let exec_n_vars = tables_log_heights[&Table::execution()];
+    previous_statements.push(SparseStatement::unique_value(
+        stack_layout.stacked_n_vars,
+        stack_layout.absolute_index(exec_id, COL_PC, 0),
+        EF::from_usize(STARTING_PC),
+    ));
+    previous_statements.push(SparseStatement::unique_value(
+        stack_layout.stacked_n_vars,
+        stack_layout.absolute_index(exec_id, COL_PC, (1 << exec_n_vars) - 1),
+        EF::from_usize(ENDING_PC),
+    ));
 
-    let global_statements_base = stacked_pcs_global_statements(
-        stacked_pcs_witness.stacked_n_vars,
-        log2_strict_usize(memory.len()),
-        bytecode.log_size(),
-        previous_statements,
-        &tables_log_heights,
-        &committed_statements,
-    );
+    let mut per_section: BTreeMap<StackSectionId, Vec<_>> = BTreeMap::new();
+    for (table, statements) in &committed_statements {
+        per_section.insert(StackSectionId::VmTable(*table), statements.clone());
+    }
+    for (descriptor, statements) in aux_layouts.iter().zip(aux_committed_statements.iter()) {
+        per_section.insert(
+            descriptor.id,
+            statements
+                .iter()
+                .map(|(point, eq_values)| (point.clone(), eq_values.clone(), BTreeMap::new()))
+                .collect(),
+        );
+    }
+
+    let global_statements_base = stacked_pcs_global_statements(stack_layout, previous_statements, per_section);
 
     WhirConfig::new(whir_config, stacked_pcs_witness.global_polynomial.by_ref().n_vars()).prove(
         &mut prover_state,
@@ -245,6 +335,16 @@ pub fn prove_execution(
         stacked_pcs_witness.inner_witness,
         &stacked_pcs_witness.global_polynomial.by_ref(),
     );
+
+    if let Some(fixed_lookups) = sha256_rn_fixed_lookups {
+        let setup_polynomial = MleOwned::Base(fixed_lookups.range_check_add.polynomial.clone());
+        WhirConfig::new(whir_config, SHA256_RN_RANGE_CHECK_ADD_STACKED_N_VARS).prove(
+            &mut prover_state,
+            setup_statements,
+            fixed_lookups.range_check_add.whir_witness.clone(),
+            &setup_polynomial.by_ref(),
+        );
+    }
 
     ExecutionProof {
         proof: prover_state.into_proof(),

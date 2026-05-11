@@ -7,6 +7,7 @@ use utils::*;
 mod trace_gen;
 
 pub mod prove_execution;
+pub mod sha256_rn_fixed_lookups;
 pub mod verify_execution;
 
 #[cfg(test)]
