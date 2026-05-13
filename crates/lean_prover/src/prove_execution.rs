@@ -1,9 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::sha256_rn_fixed_lookups::{
-    Sha256RnFixedLookupProverSetup, build_sha256_rn_big_sigma0_i0_mult_trace, build_sha256_rn_big_sigma0_i1_mult_trace,
-    build_sha256_rn_big_sigma0_o2_mult_trace, build_sha256_rn_big_sigma1_i0_mult_trace,
-    build_sha256_rn_big_sigma1_i1_mult_trace, build_sha256_rn_big_sigma1_o2_mult_trace, prove_sha256_rn_fixed_lookup,
+    Sha256RnFixedLookupProverSetup, build_sha256_rn_fixed_lookup_multiplicity_traces, prove_sha256_rn_fixed_lookup,
 };
 use crate::*;
 use lean_vm::*;
@@ -134,14 +132,7 @@ fn prove_execution_inner(
     let multiplicity_traces = sha256_rn_fixed_lookups
         .map(|_| {
             let trace = &traces[&Table::sha256_compress_rn()];
-            vec![
-                build_sha256_rn_big_sigma1_i0_mult_trace(trace),
-                build_sha256_rn_big_sigma1_i1_mult_trace(trace),
-                build_sha256_rn_big_sigma1_o2_mult_trace(trace),
-                build_sha256_rn_big_sigma0_i0_mult_trace(trace),
-                build_sha256_rn_big_sigma0_i1_mult_trace(trace),
-                build_sha256_rn_big_sigma0_o2_mult_trace(trace),
-            ]
+            build_sha256_rn_fixed_lookup_multiplicity_traces(trace)
         })
         .unwrap_or_default();
     let aux_traces = multiplicity_traces

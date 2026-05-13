@@ -1,10 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::sha256_rn_fixed_lookups::{
-    Sha256RnFixedLookupVerifierSetup, sha256_rn_big_sigma0_i0_multiplicity_trace_layout,
-    sha256_rn_big_sigma0_i1_multiplicity_trace_layout, sha256_rn_big_sigma0_o2_multiplicity_trace_layout,
-    sha256_rn_big_sigma1_i0_multiplicity_trace_layout, sha256_rn_big_sigma1_i1_multiplicity_trace_layout,
-    sha256_rn_big_sigma1_o2_multiplicity_trace_layout, verify_sha256_rn_fixed_lookup,
+    Sha256RnFixedLookupVerifierSetup, sha256_rn_fixed_lookup_multiplicity_trace_layouts, verify_sha256_rn_fixed_lookup,
 };
 use crate::*;
 use backend::{Proof, RawProof, VerifierState};
@@ -90,16 +87,7 @@ fn verify_execution_inner(
     }
 
     let aux_layouts = sha256_rn_fixed_lookups
-        .map(|_| {
-            vec![
-                sha256_rn_big_sigma1_i0_multiplicity_trace_layout(),
-                sha256_rn_big_sigma1_i1_multiplicity_trace_layout(),
-                sha256_rn_big_sigma1_o2_multiplicity_trace_layout(),
-                sha256_rn_big_sigma0_i0_multiplicity_trace_layout(),
-                sha256_rn_big_sigma0_i1_multiplicity_trace_layout(),
-                sha256_rn_big_sigma0_o2_multiplicity_trace_layout(),
-            ]
-        })
+        .map(|_| sha256_rn_fixed_lookup_multiplicity_trace_layouts())
         .unwrap_or_default();
 
     let stack_layout = compute_stack_layout(log_memory, bytecode.log_size(), &table_n_vars, &aux_layouts);

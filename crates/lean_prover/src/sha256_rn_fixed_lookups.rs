@@ -7,8 +7,12 @@ use lean_vm::{
     SHA256_RN_VIRTUAL_BIG_SIGMA0_O2_START, SHA256_RN_VIRTUAL_BIG_SIGMA1_I0_ARITY,
     SHA256_RN_VIRTUAL_BIG_SIGMA1_I0_START, SHA256_RN_VIRTUAL_BIG_SIGMA1_I1_ARITY,
     SHA256_RN_VIRTUAL_BIG_SIGMA1_I1_START, SHA256_RN_VIRTUAL_BIG_SIGMA1_O2_ARITY,
-    SHA256_RN_VIRTUAL_BIG_SIGMA1_O2_START, Sha256CompressRnCols, Sha256RnCols, TableTrace, big_sigma0, big_sigma1,
-    pext_u32,
+    SHA256_RN_VIRTUAL_BIG_SIGMA1_O2_START, SHA256_RN_VIRTUAL_MAJ_I0_HIGH_0_ARITY,
+    SHA256_RN_VIRTUAL_MAJ_I0_HIGH_0_START, SHA256_RN_VIRTUAL_MAJ_I0_HIGH_1_ARITY,
+    SHA256_RN_VIRTUAL_MAJ_I0_HIGH_1_START, SHA256_RN_VIRTUAL_MAJ_I0_LOW_ARITY, SHA256_RN_VIRTUAL_MAJ_I0_LOW_START,
+    SHA256_RN_VIRTUAL_MAJ_I1_HIGH_ARITY, SHA256_RN_VIRTUAL_MAJ_I1_HIGH_START, SHA256_RN_VIRTUAL_MAJ_I1_LOW_0_ARITY,
+    SHA256_RN_VIRTUAL_MAJ_I1_LOW_0_START, SHA256_RN_VIRTUAL_MAJ_I1_LOW_1_ARITY, SHA256_RN_VIRTUAL_MAJ_I1_LOW_1_START,
+    Sha256CompressRnCols, Sha256RnCols, TableTrace, big_sigma0, big_sigma1, pext_u32,
 };
 use std::{borrow::Borrow, collections::BTreeMap};
 use sub_protocols::{
@@ -51,8 +55,22 @@ pub const SHA256_RN_BIG_SIGMA1_I0_MULT_SECTION: &str = "sha256_rn_big_sigma1_i0_
 pub const SHA256_RN_BIG_SIGMA1_I1_MULT_SECTION: &str = "sha256_rn_big_sigma1_i1_mult";
 pub const SHA256_RN_BIG_SIGMA1_O2_MULT_SECTION: &str = "sha256_rn_big_sigma1_o2_mult";
 
-pub const SHA256_RN_BIG_SIGMA_BATCH_N_COLUMNS: usize = 6;
-pub const SHA256_RN_BIG_SIGMA_BATCH_N_AUX: usize = 6;
+pub const SHA256_RN_MAJ_I0_LOW_LOG_N_ROWS: usize = 3 * BigSigma0::I0_L.count_ones() as usize;
+pub const SHA256_RN_MAJ_I0_HIGH_0_LOG_N_ROWS: usize = 3 * BigSigma0::I0_H0.count_ones() as usize;
+pub const SHA256_RN_MAJ_I0_HIGH_1_LOG_N_ROWS: usize = 3 * BigSigma0::I0_H1.count_ones() as usize;
+pub const SHA256_RN_MAJ_I1_LOW_0_LOG_N_ROWS: usize = 3 * BigSigma0::I1_L0.count_ones() as usize;
+pub const SHA256_RN_MAJ_I1_LOW_1_LOG_N_ROWS: usize = 3 * BigSigma0::I1_L1.count_ones() as usize;
+pub const SHA256_RN_MAJ_I1_HIGH_LOG_N_ROWS: usize = 3 * BigSigma0::I1_H.count_ones() as usize;
+pub const SHA256_RN_MAJ_N_COLUMNS: usize = 4;
+pub const SHA256_RN_MAJ_I0_LOW_MULT_SECTION: &str = "sha256_rn_maj_i0_low_mult";
+pub const SHA256_RN_MAJ_I0_HIGH_0_MULT_SECTION: &str = "sha256_rn_maj_i0_high_0_mult";
+pub const SHA256_RN_MAJ_I0_HIGH_1_MULT_SECTION: &str = "sha256_rn_maj_i0_high_1_mult";
+pub const SHA256_RN_MAJ_I1_LOW_0_MULT_SECTION: &str = "sha256_rn_maj_i1_low_0_mult";
+pub const SHA256_RN_MAJ_I1_LOW_1_MULT_SECTION: &str = "sha256_rn_maj_i1_low_1_mult";
+pub const SHA256_RN_MAJ_I1_HIGH_MULT_SECTION: &str = "sha256_rn_maj_i1_high_mult";
+
+pub const SHA256_RN_FIXED_LOOKUP_MAX_ARITY: usize = 6;
+pub const SHA256_RN_FIXED_LOOKUP_N_RELATIONS: usize = 12;
 
 const SHA256_RN_FIXED_LOOKUP_TRANSCRIPT_DOMAIN: usize = 0x5A_52_4E;
 const SHA256_RN_FIXED_LOOKUP_TRANSCRIPT_VERSION: usize = 6;
@@ -62,6 +80,12 @@ const SHA256_RN_BIG_SIGMA0_O2_FIXED_LOOKUP_DOMAINSEP: usize = 0xB0_02;
 const SHA256_RN_BIG_SIGMA1_I0_FIXED_LOOKUP_DOMAINSEP: usize = 0xB1_10;
 const SHA256_RN_BIG_SIGMA1_I1_FIXED_LOOKUP_DOMAINSEP: usize = 0xB1_11;
 const SHA256_RN_BIG_SIGMA1_O2_FIXED_LOOKUP_DOMAINSEP: usize = 0xB1_02;
+const SHA256_RN_MAJ_I0_LOW_FIXED_LOOKUP_DOMAINSEP: usize = 0xBA_00;
+const SHA256_RN_MAJ_I0_HIGH_0_FIXED_LOOKUP_DOMAINSEP: usize = 0xBA_01;
+const SHA256_RN_MAJ_I0_HIGH_1_FIXED_LOOKUP_DOMAINSEP: usize = 0xBA_02;
+const SHA256_RN_MAJ_I1_LOW_0_FIXED_LOOKUP_DOMAINSEP: usize = 0xBA_10;
+const SHA256_RN_MAJ_I1_LOW_1_FIXED_LOOKUP_DOMAINSEP: usize = 0xBA_11;
+const SHA256_RN_MAJ_I1_HIGH_FIXED_LOOKUP_DOMAINSEP: usize = 0xBA_12;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sha256RnFixedTableVerifierSetup {
@@ -82,9 +106,9 @@ impl Sha256RnFixedLookupVerifierSetup {
             F::from_usize(SHA256_RN_FIXED_LOOKUP_TRANSCRIPT_DOMAIN),
             F::from_usize(SHA256_RN_FIXED_LOOKUP_TRANSCRIPT_VERSION),
         ];
-        for relation in relations() {
+        for (&relation, fixed_table) in &self.fixed_tables {
             scalars.push(F::from_usize(relation.domain_separator().to_usize()));
-            self.fixed_tables[&relation].append_transcript_scalars(&mut scalars);
+            fixed_table.append_transcript_scalars(&mut scalars);
         }
         scalars
     }
@@ -160,6 +184,12 @@ impl MultiplicityTrace {
                 Sha256RnRelation::BigSigma0I0 => SHA256_RN_BIG_SIGMA0_I0_MULT_SECTION,
                 Sha256RnRelation::BigSigma0I1 => SHA256_RN_BIG_SIGMA0_I1_MULT_SECTION,
                 Sha256RnRelation::BigSigma0O2 => SHA256_RN_BIG_SIGMA0_O2_MULT_SECTION,
+                Sha256RnRelation::MajI0Low => SHA256_RN_MAJ_I0_LOW_MULT_SECTION,
+                Sha256RnRelation::MajI0High0 => SHA256_RN_MAJ_I0_HIGH_0_MULT_SECTION,
+                Sha256RnRelation::MajI0High1 => SHA256_RN_MAJ_I0_HIGH_1_MULT_SECTION,
+                Sha256RnRelation::MajI1Low0 => SHA256_RN_MAJ_I1_LOW_0_MULT_SECTION,
+                Sha256RnRelation::MajI1Low1 => SHA256_RN_MAJ_I1_LOW_1_MULT_SECTION,
+                Sha256RnRelation::MajI1High => SHA256_RN_MAJ_I1_HIGH_MULT_SECTION,
             }),
             log_n_rows: self.log_n_rows,
             columns: vec![self.column],
@@ -272,17 +302,6 @@ fn generate_big_sigma1_o2_columns() -> Vec<Vec<F>> {
         }
     }
     columns
-}
-
-fn stack_fixed_columns(columns: &[Vec<F>], log_n_rows: usize, padded_n_columns: usize) -> Vec<F> {
-    let n_rows = 1 << log_n_rows;
-    let mut polynomial = F::zero_vec(n_rows * padded_n_columns);
-    for (col_idx, col) in columns.iter().enumerate() {
-        assert_eq!(col.len(), n_rows);
-        let start = col_idx << log_n_rows;
-        polynomial[start..start + n_rows].copy_from_slice(col);
-    }
-    polynomial
 }
 
 fn setup_fixed_table(
@@ -420,6 +439,12 @@ pub enum Sha256RnRelation {
     BigSigma0I0,
     BigSigma0I1,
     BigSigma0O2,
+    MajI0Low,
+    MajI0High0,
+    MajI0High1,
+    MajI1Low0,
+    MajI1Low1,
+    MajI1High,
 }
 
 impl Sha256RnRelation {
@@ -431,6 +456,12 @@ impl Sha256RnRelation {
             Self::BigSigma0I0 => SHA256_RN_BIG_SIGMA0_I0_LOG_N_ROWS,
             Self::BigSigma0I1 => SHA256_RN_BIG_SIGMA0_I1_LOG_N_ROWS,
             Self::BigSigma0O2 => SHA256_RN_BIG_SIGMA0_O2_LOG_N_ROWS,
+            Self::MajI0Low => SHA256_RN_MAJ_I0_LOW_LOG_N_ROWS,
+            Self::MajI0High0 => SHA256_RN_MAJ_I0_HIGH_0_LOG_N_ROWS,
+            Self::MajI0High1 => SHA256_RN_MAJ_I0_HIGH_1_LOG_N_ROWS,
+            Self::MajI1Low0 => SHA256_RN_MAJ_I1_LOW_0_LOG_N_ROWS,
+            Self::MajI1Low1 => SHA256_RN_MAJ_I1_LOW_1_LOG_N_ROWS,
+            Self::MajI1High => SHA256_RN_MAJ_I1_HIGH_LOG_N_ROWS,
         }
     }
 
@@ -442,6 +473,12 @@ impl Sha256RnRelation {
             Self::BigSigma0I0 => SHA256_RN_BIG_SIGMA0_I0_FIXED_LOOKUP_DOMAINSEP,
             Self::BigSigma0I1 => SHA256_RN_BIG_SIGMA0_I1_FIXED_LOOKUP_DOMAINSEP,
             Self::BigSigma0O2 => SHA256_RN_BIG_SIGMA0_O2_FIXED_LOOKUP_DOMAINSEP,
+            Self::MajI0Low => SHA256_RN_MAJ_I0_LOW_FIXED_LOOKUP_DOMAINSEP,
+            Self::MajI0High0 => SHA256_RN_MAJ_I0_HIGH_0_FIXED_LOOKUP_DOMAINSEP,
+            Self::MajI0High1 => SHA256_RN_MAJ_I0_HIGH_1_FIXED_LOOKUP_DOMAINSEP,
+            Self::MajI1Low0 => SHA256_RN_MAJ_I1_LOW_0_FIXED_LOOKUP_DOMAINSEP,
+            Self::MajI1Low1 => SHA256_RN_MAJ_I1_LOW_1_FIXED_LOOKUP_DOMAINSEP,
+            Self::MajI1High => SHA256_RN_MAJ_I1_HIGH_FIXED_LOOKUP_DOMAINSEP,
         })
     }
 
@@ -453,6 +490,12 @@ impl Sha256RnRelation {
             Self::BigSigma0I0 => 3,
             Self::BigSigma0I1 => 4,
             Self::BigSigma0O2 => 5,
+            Self::MajI0Low => 6,
+            Self::MajI0High0 => 7,
+            Self::MajI0High1 => 8,
+            Self::MajI1Low0 => 9,
+            Self::MajI1Low1 => 10,
+            Self::MajI1High => 11,
         }
     }
 
@@ -462,6 +505,12 @@ impl Sha256RnRelation {
             Self::BigSigma1O2 => SHA256_RN_BIG_SIGMA1_O2_N_COLUMNS,
             Self::BigSigma0I0 | Self::BigSigma0I1 => SHA256_RN_BIG_SIGMA0_IO_N_COLUMNS,
             Self::BigSigma0O2 => SHA256_RN_BIG_SIGMA0_O2_N_COLUMNS,
+            Self::MajI0Low
+            | Self::MajI0High0
+            | Self::MajI0High1
+            | Self::MajI1Low0
+            | Self::MajI1Low1
+            | Self::MajI1High => SHA256_RN_MAJ_N_COLUMNS,
         }
     }
 
@@ -475,6 +524,12 @@ impl Sha256RnRelation {
             Self::BigSigma1O2 => SHA256_RN_BIG_SIGMA1_O2_N_COLUMNS,
             Self::BigSigma0I0 | Self::BigSigma0I1 => SHA256_RN_BIG_SIGMA0_IO_PADDED_N_COLUMNS,
             Self::BigSigma0O2 => SHA256_RN_BIG_SIGMA0_O2_N_COLUMNS,
+            Self::MajI0Low
+            | Self::MajI0High0
+            | Self::MajI0High1
+            | Self::MajI1Low0
+            | Self::MajI1Low1
+            | Self::MajI1High => SHA256_RN_MAJ_N_COLUMNS,
         }
     }
 
@@ -508,11 +563,29 @@ impl Sha256RnRelation {
                 SHA256_RN_VIRTUAL_BIG_SIGMA0_O2_START,
                 SHA256_RN_VIRTUAL_BIG_SIGMA0_O2_ARITY,
             ),
+            Self::MajI0Low => (SHA256_RN_VIRTUAL_MAJ_I0_LOW_START, SHA256_RN_VIRTUAL_MAJ_I0_LOW_ARITY),
+            Self::MajI0High0 => (
+                SHA256_RN_VIRTUAL_MAJ_I0_HIGH_0_START,
+                SHA256_RN_VIRTUAL_MAJ_I0_HIGH_0_ARITY,
+            ),
+            Self::MajI0High1 => (
+                SHA256_RN_VIRTUAL_MAJ_I0_HIGH_1_START,
+                SHA256_RN_VIRTUAL_MAJ_I0_HIGH_1_ARITY,
+            ),
+            Self::MajI1Low0 => (
+                SHA256_RN_VIRTUAL_MAJ_I1_LOW_0_START,
+                SHA256_RN_VIRTUAL_MAJ_I1_LOW_0_ARITY,
+            ),
+            Self::MajI1Low1 => (
+                SHA256_RN_VIRTUAL_MAJ_I1_LOW_1_START,
+                SHA256_RN_VIRTUAL_MAJ_I1_LOW_1_ARITY,
+            ),
+            Self::MajI1High => (SHA256_RN_VIRTUAL_MAJ_I1_HIGH_START, SHA256_RN_VIRTUAL_MAJ_I1_HIGH_ARITY),
         }
     }
 }
 
-fn relations() -> [Sha256RnRelation; SHA256_RN_BIG_SIGMA_BATCH_N_AUX] {
+fn relations() -> [Sha256RnRelation; SHA256_RN_FIXED_LOOKUP_N_RELATIONS] {
     [
         Sha256RnRelation::BigSigma1I0,
         Sha256RnRelation::BigSigma1I1,
@@ -520,11 +593,150 @@ fn relations() -> [Sha256RnRelation; SHA256_RN_BIG_SIGMA_BATCH_N_AUX] {
         Sha256RnRelation::BigSigma0I0,
         Sha256RnRelation::BigSigma0I1,
         Sha256RnRelation::BigSigma0O2,
+        Sha256RnRelation::MajI0Low,
+        Sha256RnRelation::MajI0High0,
+        Sha256RnRelation::MajI0High1,
+        Sha256RnRelation::MajI1Low0,
+        Sha256RnRelation::MajI1Low1,
+        Sha256RnRelation::MajI1High,
     ]
 }
 
-fn fixed_columns(setup: &Sha256RnFixedLookupProverSetup, relation: Sha256RnRelation) -> &[Vec<F>] {
-    &setup.fixed_tables[&relation].columns
+pub fn sha256_rn_fixed_lookup_multiplicity_trace_layouts() -> Vec<StackSectionDescriptor> {
+    relations()
+        .into_iter()
+        .map(|relation| StackSectionDescriptor {
+            id: StackSectionId::Aux(match relation {
+                Sha256RnRelation::BigSigma1I0 => SHA256_RN_BIG_SIGMA1_I0_MULT_SECTION,
+                Sha256RnRelation::BigSigma1I1 => SHA256_RN_BIG_SIGMA1_I1_MULT_SECTION,
+                Sha256RnRelation::BigSigma1O2 => SHA256_RN_BIG_SIGMA1_O2_MULT_SECTION,
+                Sha256RnRelation::BigSigma0I0 => SHA256_RN_BIG_SIGMA0_I0_MULT_SECTION,
+                Sha256RnRelation::BigSigma0I1 => SHA256_RN_BIG_SIGMA0_I1_MULT_SECTION,
+                Sha256RnRelation::BigSigma0O2 => SHA256_RN_BIG_SIGMA0_O2_MULT_SECTION,
+                Sha256RnRelation::MajI0Low => SHA256_RN_MAJ_I0_LOW_MULT_SECTION,
+                Sha256RnRelation::MajI0High0 => SHA256_RN_MAJ_I0_HIGH_0_MULT_SECTION,
+                Sha256RnRelation::MajI0High1 => SHA256_RN_MAJ_I0_HIGH_1_MULT_SECTION,
+                Sha256RnRelation::MajI1Low0 => SHA256_RN_MAJ_I1_LOW_0_MULT_SECTION,
+                Sha256RnRelation::MajI1Low1 => SHA256_RN_MAJ_I1_LOW_1_MULT_SECTION,
+                Sha256RnRelation::MajI1High => SHA256_RN_MAJ_I1_HIGH_MULT_SECTION,
+            }),
+            log_n_rows: relation.log_n_rows(),
+            n_columns: 1,
+        })
+        .collect()
+}
+
+fn maj_u32(a: u32, b: u32, c: u32) -> u32 {
+    (a & b) ^ (a & c) ^ (b & c)
+}
+
+fn maj_mask(relation: Sha256RnRelation) -> Option<u32> {
+    match relation {
+        Sha256RnRelation::MajI0Low => Some(BigSigma0::I0_L),
+        Sha256RnRelation::MajI0High0 => Some(BigSigma0::I0_H0),
+        Sha256RnRelation::MajI0High1 => Some(BigSigma0::I0_H1),
+        Sha256RnRelation::MajI1Low0 => Some(BigSigma0::I1_L0),
+        Sha256RnRelation::MajI1Low1 => Some(BigSigma0::I1_L1),
+        Sha256RnRelation::MajI1High => Some(BigSigma0::I1_H),
+        _ => None,
+    }
+}
+
+fn fixed_tuple_at_row(relation: Sha256RnRelation, row: usize) -> Vec<F> {
+    match relation {
+        Sha256RnRelation::BigSigma1I0 => {
+            let x = scatter_subset(row, BigSigma1::I0);
+            let y = big_sigma1(x);
+            vec![
+                F::from_u32(x & BigSigma1::I0_L),
+                F::from_u32((x >> BITS_PER_LIMB) & BigSigma1::I0_H),
+                F::from_u32(y & BigSigma1::O0_L),
+                F::from_u32((y >> BITS_PER_LIMB) & BigSigma1::O0_H),
+                F::from_u32(pext_u32(y & BigSigma1::O2, BigSigma1::O2)),
+            ]
+        }
+        Sha256RnRelation::BigSigma1I1 => {
+            let x = scatter_subset(row, BigSigma1::I1);
+            let y = big_sigma1(x);
+            vec![
+                F::from_u32(x & BigSigma1::I1_L),
+                F::from_u32((x >> BITS_PER_LIMB) & BigSigma1::I1_H),
+                F::from_u32(y & BigSigma1::O1_L),
+                F::from_u32((y >> BITS_PER_LIMB) & BigSigma1::O1_H),
+                F::from_u32(pext_u32(y & BigSigma1::O2, BigSigma1::O2)),
+            ]
+        }
+        Sha256RnRelation::BigSigma1O2 => {
+            let side_log = SHA256_RN_BIG_SIGMA1_O2_INPUT_LOG_N_ROWS;
+            let left_idx = row >> side_log;
+            let right_idx = row & ((1 << side_log) - 1);
+            let xor = scatter_subset(left_idx, BigSigma1::O2) ^ scatter_subset(right_idx, BigSigma1::O2);
+            vec![
+                F::from_usize(left_idx),
+                F::from_usize(right_idx),
+                F::from_u32(xor & LIMB_MASK),
+                F::from_u32(xor >> BITS_PER_LIMB),
+            ]
+        }
+        Sha256RnRelation::BigSigma0I0 => {
+            let x = scatter_subset(row, SHA256_RN_BIG_SIGMA0_I0);
+            let y = big_sigma0(x);
+            vec![
+                F::from_u32(x & BigSigma0::I0_L),
+                F::from_u32((x >> BITS_PER_LIMB) & BigSigma0::I0_H0),
+                F::from_u32((x >> 24) & BigSigma0::I0_H1),
+                F::from_u32(y & BigSigma0::O0_L),
+                F::from_u32((y >> BITS_PER_LIMB) & BigSigma0::O0_H),
+                F::from_u32(pext_u32(y & BigSigma0::O2, BigSigma0::O2)),
+            ]
+        }
+        Sha256RnRelation::BigSigma0I1 => {
+            let x = scatter_subset(row, SHA256_RN_BIG_SIGMA0_I1);
+            let y = big_sigma0(x);
+            vec![
+                F::from_u32(x & BigSigma0::I1_L0),
+                F::from_u32((x >> 8) & BigSigma0::I1_L1),
+                F::from_u32((x >> BITS_PER_LIMB) & BigSigma0::I1_H),
+                F::from_u32(y & BigSigma0::O1_L),
+                F::from_u32((y >> BITS_PER_LIMB) & BigSigma0::O1_H),
+                F::from_u32(pext_u32(y & BigSigma0::O2, BigSigma0::O2)),
+            ]
+        }
+        Sha256RnRelation::BigSigma0O2 => {
+            let side_log = SHA256_RN_BIG_SIGMA0_O2_INPUT_LOG_N_ROWS;
+            let left_idx = row >> side_log;
+            let right_idx = row & ((1 << side_log) - 1);
+            let xor = scatter_subset(left_idx, BigSigma0::O2) ^ scatter_subset(right_idx, BigSigma0::O2);
+            vec![
+                F::from_usize(left_idx),
+                F::from_usize(right_idx),
+                F::from_u32(xor & LIMB_MASK),
+                F::from_u32(xor >> BITS_PER_LIMB),
+            ]
+        }
+        Sha256RnRelation::MajI0Low
+        | Sha256RnRelation::MajI0High0
+        | Sha256RnRelation::MajI0High1
+        | Sha256RnRelation::MajI1Low0
+        | Sha256RnRelation::MajI1Low1
+        | Sha256RnRelation::MajI1High => {
+            let mask = maj_mask(relation).unwrap();
+            let n = mask.count_ones() as usize;
+            let input_mask = (1 << n) - 1;
+            let a_idx = row >> (2 * n);
+            let b_idx = (row >> n) & input_mask;
+            let c_idx = row & input_mask;
+            let a = scatter_subset(a_idx, mask);
+            let b = scatter_subset(b_idx, mask);
+            let c = scatter_subset(c_idx, mask);
+            vec![
+                F::from_u32(a),
+                F::from_u32(b),
+                F::from_u32(c),
+                F::from_u32(maj_u32(a, b, c)),
+            ]
+        }
+    }
 }
 
 fn bit_from_scattered_mask(mask: u32, bit_position: usize, point: &[EF]) -> EF {
@@ -610,6 +822,37 @@ fn o2_output_mle(o2_mask: u32, side_n_vars: usize, column_mask: u32, shift: usiz
         .sum()
 }
 
+fn maj_bit_mle(a: EF, b: EF, c: EF) -> EF {
+    a * b + a * c + b * c - EF::from_usize(2) * a * b * c
+}
+
+fn maj_output_mle(mask: u32, point: &[EF]) -> EF {
+    let n = mask.count_ones() as usize;
+    debug_assert_eq!(point.len(), 3 * n);
+    let a_point = &point[..n];
+    let b_point = &point[n..2 * n];
+    let c_point = &point[2 * n..];
+    (0..32)
+        .filter(|&bit| mask & (1u32 << bit) != 0)
+        .map(|bit| {
+            let a = bit_from_scattered_mask(mask, bit, a_point);
+            let b = bit_from_scattered_mask(mask, bit, b_point);
+            let c = bit_from_scattered_mask(mask, bit, c_point);
+            EF::from_usize(1 << bit) * maj_bit_mle(a, b, c)
+        })
+        .sum()
+}
+
+fn eval_maj_fixed_columns_closed_form(mask: u32, point: &[EF]) -> Vec<EF> {
+    let n = mask.count_ones() as usize;
+    vec![
+        projected_input_mle(mask, mask, 0, &point[..n]),
+        projected_input_mle(mask, mask, 0, &point[n..2 * n]),
+        projected_input_mle(mask, mask, 0, &point[2 * n..]),
+        maj_output_mle(mask, point),
+    ]
+}
+
 fn eval_fixed_columns_closed_form(relation: Sha256RnRelation, point: &[EF]) -> Vec<EF> {
     match relation {
         Sha256RnRelation::BigSigma0I0 => vec![
@@ -672,6 +915,12 @@ fn eval_fixed_columns_closed_form(relation: Sha256RnRelation, point: &[EF]) -> V
                 o2_output_mle(BigSigma1::O2, side_n_vars, LIMB_MASK, BITS_PER_LIMB, point),
             ]
         }
+        Sha256RnRelation::MajI0Low
+        | Sha256RnRelation::MajI0High0
+        | Sha256RnRelation::MajI0High1
+        | Sha256RnRelation::MajI1Low0
+        | Sha256RnRelation::MajI1Low1
+        | Sha256RnRelation::MajI1High => eval_maj_fixed_columns_closed_form(maj_mask(relation).unwrap(), point),
     }
 }
 
@@ -727,6 +976,19 @@ fn relation_index(relation: Sha256RnRelation, tuple: &[F]) -> usize {
             debug_assert!(right < (1 << SHA256_RN_BIG_SIGMA0_O2_INPUT_LOG_N_ROWS));
             (left << SHA256_RN_BIG_SIGMA0_O2_INPUT_LOG_N_ROWS) + right
         }
+        Sha256RnRelation::MajI0Low
+        | Sha256RnRelation::MajI0High0
+        | Sha256RnRelation::MajI0High1
+        | Sha256RnRelation::MajI1Low0
+        | Sha256RnRelation::MajI1Low1
+        | Sha256RnRelation::MajI1High => {
+            let mask = maj_mask(relation).unwrap();
+            let n = mask.count_ones() as usize;
+            let a = pext_u32(tuple[0].to_usize() as u32, mask) as usize;
+            let b = pext_u32(tuple[1].to_usize() as u32, mask) as usize;
+            let c = pext_u32(tuple[2].to_usize() as u32, mask) as usize;
+            (a << (2 * n)) + (b << n) + c
+        }
     };
     debug_assert!(idx < (1 << relation.log_n_rows()));
     idx
@@ -772,6 +1034,13 @@ pub fn build_sha256_rn_big_sigma1_i1_mult_trace(trace: &TableTrace) -> Multiplic
 
 pub fn build_sha256_rn_big_sigma1_o2_mult_trace(trace: &TableTrace) -> MultiplicityTrace {
     build_mult_trace(trace, Sha256RnRelation::BigSigma1O2)
+}
+
+pub fn build_sha256_rn_fixed_lookup_multiplicity_traces(trace: &TableTrace) -> Vec<MultiplicityTrace> {
+    relations()
+        .into_iter()
+        .map(|relation| build_mult_trace(trace, relation))
+        .collect()
 }
 
 fn reconstruct_sha256_rn_compression_states(cols: &Sha256RnCols<EF>) -> [[EF; 16]; SHA256_RN_COMPRESS_ROUNDS] {
@@ -849,7 +1118,9 @@ impl LogupSection {
     fn order_key(self, log_n_rows: usize) -> (std::cmp::Reverse<usize>, usize) {
         let tie_breaker = match self {
             Self::Table(relation) => relation.tie_breaker(),
-            Self::Request { relation, round } => 6 + round * 6 + relation.tie_breaker(),
+            Self::Request { relation, round } => {
+                SHA256_RN_FIXED_LOOKUP_N_RELATIONS + round * SHA256_RN_FIXED_LOOKUP_N_RELATIONS + relation.tie_breaker()
+            }
         };
         (std::cmp::Reverse(self.log_n_rows(log_n_rows)), tie_breaker)
     }
@@ -883,7 +1154,10 @@ pub fn prove_sha256_rn_fixed_lookup(
     let log_n_rows = trace.log_n_rows;
     let n_rows = 1 << log_n_rows;
     debug_assert_eq!(trace.columns[SHA256_RN_COL_FLAG].len(), n_rows);
-    assert_eq!(fixed_lookup_multiplicity_traces.len(), SHA256_RN_BIG_SIGMA_BATCH_N_AUX);
+    assert_eq!(
+        fixed_lookup_multiplicity_traces.len(),
+        SHA256_RN_FIXED_LOOKUP_N_RELATIONS
+    );
 
     let sections = logup_sections(log_n_rows);
     let total_active_len = sections
@@ -895,7 +1169,7 @@ pub fn prove_sha256_rn_fixed_lookup(
     assert!(total_len.is_multiple_of(width));
 
     let c = prover_state.sample();
-    let alphas = prover_state.sample_vec(log2_ceil_usize(SHA256_RN_BIG_SIGMA_BATCH_N_COLUMNS + 1));
+    let alphas = prover_state.sample_vec(log2_ceil_usize(SHA256_RN_FIXED_LOOKUP_MAX_ARITY + 1));
     let alphas_eq_poly = eval_eq(&alphas);
     let c_packed = EFPacking::<EF>::from(c);
     let alphas_packed: Vec<EFPacking<EF>> = alphas_eq_poly.iter().map(|a| EFPacking::<EF>::from(*a)).collect();
@@ -936,14 +1210,14 @@ pub fn prove_sha256_rn_fixed_lookup(
                         }
                     });
 
-                let columns = fixed_columns(setup, relation);
                 denominators[offset / width..][..section_n_rows / width]
                     .iter_mut()
                     .enumerate()
                     .for_each(|(p, slot)| {
                         let mut values = vec![PFPacking::<EF>::ZERO; relation.arity()];
-                        for (col_idx, col) in columns.iter().take(relation.arity()).enumerate() {
-                            values[col_idx] = PFPacking::<EF>::from_fn(|w| col[src_idx(p, w)]);
+                        for (value_idx, value) in values.iter_mut().enumerate() {
+                            *value =
+                                PFPacking::<EF>::from_fn(|w| fixed_tuple_at_row(relation, src_idx(p, w))[value_idx]);
                         }
                         let table_contrib =
                             EFPacking::<EF>::from(*alphas_eq_poly.last().unwrap() * relation.domain_separator());
@@ -989,7 +1263,7 @@ pub fn prove_sha256_rn_fixed_lookup(
     );
     assert_eq!(sum, EF::ZERO);
 
-    let mut multiplicity_claims = Vec::with_capacity(SHA256_RN_BIG_SIGMA_BATCH_N_AUX);
+    let mut multiplicity_claims = Vec::with_capacity(SHA256_RN_FIXED_LOOKUP_N_RELATIONS);
     for relation in sections.iter().filter_map(|section| match section {
         LogupSection::Table(relation) => Some(*relation),
         LogupSection::Request { .. } => None,
@@ -1005,14 +1279,17 @@ pub fn prove_sha256_rn_fixed_lookup(
             (fixed_point.clone(), BTreeMap::from([(0, mult_eval)])),
         ));
 
-        debug_assert_eq!(
-            fixed_columns(setup, relation)
-                .iter()
-                .map(|col| col.evaluate(&fixed_point))
-                .collect::<Vec<_>>(),
-            eval_fixed_columns_closed_form(relation, &fixed_point.0),
-            "{relation:?} closed-form fixed-column MLE does not match direct fixed-table MLE at prover GKR point"
-        );
+        if let Some(fixed_table) = setup.fixed_tables.get(&relation) {
+            debug_assert_eq!(
+                fixed_table
+                    .columns
+                    .iter()
+                    .map(|col| col.evaluate(&fixed_point))
+                    .collect::<Vec<_>>(),
+                eval_fixed_columns_closed_form(relation, &fixed_point.0),
+                "{relation:?} closed-form fixed-column MLE does not match direct fixed-table MLE at prover GKR point"
+            );
+        }
     }
 
     let point = MultilinearPoint(from_end(&gkr_point.0, log_n_rows).to_vec());
@@ -1044,7 +1321,7 @@ pub fn verify_sha256_rn_fixed_lookup(
     let total_gkr_n_vars = log2_ceil_usize(total_active_len);
 
     let c = verifier_state.sample();
-    let alphas = verifier_state.sample_vec(log2_ceil_usize(SHA256_RN_BIG_SIGMA_BATCH_N_COLUMNS + 1));
+    let alphas = verifier_state.sample_vec(log2_ceil_usize(SHA256_RN_FIXED_LOOKUP_MAX_ARITY + 1));
     let alphas_eq_poly = eval_eq(&alphas);
 
     let (sum, gkr_point, numerators_value, denominators_value) = verify_gkr_quotient(verifier_state, total_gkr_n_vars)?;
@@ -1058,8 +1335,8 @@ pub fn verify_sha256_rn_fixed_lookup(
         MultilinearPoint(bits).eq_poly_outside(&MultilinearPoint(gkr_point.0[..n_missing].to_vec()))
     };
 
-    let mut multiplicity_claims = Vec::with_capacity(SHA256_RN_BIG_SIGMA_BATCH_N_AUX);
-    let mut table_mult_evals = [EF::ZERO; SHA256_RN_BIG_SIGMA_BATCH_N_AUX];
+    let mut multiplicity_claims = Vec::with_capacity(SHA256_RN_FIXED_LOOKUP_N_RELATIONS);
+    let mut table_mult_evals = [EF::ZERO; SHA256_RN_FIXED_LOOKUP_N_RELATIONS];
     let mut fixed_evals = relations()
         .into_iter()
         .map(|relation| vec![EF::ZERO; relation.arity()])
@@ -1145,6 +1422,42 @@ pub fn verify_sha256_rn_fixed_lookup(
                         c_round.sigma_0_o21_pext,
                         c_round.sigma_0_o2_low,
                         c_round.sigma_0_o2_high,
+                    ],
+                    Sha256RnRelation::MajI0Low => vec![
+                        rn_states[round][0] - c_round.a_i1_low_0 - c_round.a_i1_low_1 * two_8,
+                        rn_states[round][2] - c_round.b_i1_low_0 - c_round.b_i1_low_1 * two_8,
+                        rn_states[round][4] - c_round.c_i1_low_0 - c_round.c_i1_low_1 * two_8,
+                        c_round.maj_i0_low,
+                    ],
+                    Sha256RnRelation::MajI0High0 => vec![
+                        c_round.a_i0_high_0,
+                        c_round.b_i0_high_0,
+                        c_round.c_i0_high_0,
+                        c_round.maj_i0_high_0,
+                    ],
+                    Sha256RnRelation::MajI0High1 => vec![
+                        c_round.a_i0_high_1,
+                        c_round.b_i0_high_1,
+                        c_round.c_i0_high_1,
+                        c_round.maj_i0_high_1,
+                    ],
+                    Sha256RnRelation::MajI1Low0 => vec![
+                        c_round.a_i1_low_0,
+                        c_round.b_i1_low_0,
+                        c_round.c_i1_low_0,
+                        c_round.maj_i1_low_0,
+                    ],
+                    Sha256RnRelation::MajI1Low1 => vec![
+                        c_round.a_i1_low_1,
+                        c_round.b_i1_low_1,
+                        c_round.c_i1_low_1,
+                        c_round.maj_i1_low_1,
+                    ],
+                    Sha256RnRelation::MajI1High => vec![
+                        rn_states[round][1] - c_round.a_i0_high_0 - c_round.a_i0_high_1 * two_8,
+                        rn_states[round][3] - c_round.b_i0_high_0 - c_round.b_i0_high_1 * two_8,
+                        rn_states[round][5] - c_round.c_i0_high_0 - c_round.c_i0_high_1 * two_8,
+                        c_round.maj_i1_high,
                     ],
                 };
                 retrieved_numerators_value += pref * rn_cols.flag;
@@ -1384,6 +1697,62 @@ mod tests {
     }
 
     #[test]
+    fn maj_fixed_rows_match_indexing() {
+        for relation in [
+            Sha256RnRelation::MajI0Low,
+            Sha256RnRelation::MajI0High0,
+            Sha256RnRelation::MajI0High1,
+            Sha256RnRelation::MajI1Low0,
+            Sha256RnRelation::MajI1Low1,
+            Sha256RnRelation::MajI1High,
+        ] {
+            let mask = maj_mask(relation).unwrap();
+            let n = mask.count_ones() as usize;
+            assert_eq!(relation.log_n_rows(), 3 * n);
+            let row = ((3usize % (1 << n)) << (2 * n)) + ((5usize % (1 << n)) << n) + (7usize % (1 << n));
+            let tuple = fixed_tuple_at_row(relation, row);
+            let a = scatter_subset(3usize % (1 << n), mask);
+            let b = scatter_subset(5usize % (1 << n), mask);
+            let c = scatter_subset(7usize % (1 << n), mask);
+            assert_eq!(
+                tuple,
+                vec![
+                    F::from_u32(a),
+                    F::from_u32(b),
+                    F::from_u32(c),
+                    F::from_u32(maj_u32(a, b, c))
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn maj_closed_form_mle_matches_direct_mle() {
+        for relation in [
+            Sha256RnRelation::MajI0Low,
+            Sha256RnRelation::MajI0High0,
+            Sha256RnRelation::MajI0High1,
+            Sha256RnRelation::MajI1Low0,
+            Sha256RnRelation::MajI1Low1,
+            Sha256RnRelation::MajI1High,
+        ] {
+            let point = (0..relation.log_n_rows())
+                .map(|i| EF::from_usize(23 * i + 11))
+                .collect::<Vec<_>>();
+            let closed_form = eval_fixed_columns_closed_form(relation, &point);
+            assert_eq!(closed_form.len(), relation.arity());
+            for (col_idx, closed) in closed_form.iter().enumerate() {
+                let column = (0..1 << relation.log_n_rows())
+                    .map(|row| fixed_tuple_at_row(relation, row)[col_idx])
+                    .collect::<Vec<_>>();
+                let direct = column.evaluate(&MultilinearPoint(point.clone()));
+                println!("{relation:?} col {col_idx}: direct={direct:?}, closed_form={closed:?}");
+                assert_eq!(direct, *closed);
+            }
+        }
+    }
+
+    #[test]
     fn sha256_rn_fixed_lookup_setup_is_deterministic() {
         let whir_config = default_whir_config(1);
         let setup_a = setup_sha256_rn_fixed_lookups(&whir_config);
@@ -1520,6 +1889,79 @@ mod tests {
         assert!(i0.column.iter().all(|x| *x == F::ZERO));
         assert!(i1.column.iter().all(|x| *x == F::ZERO));
         assert!(o2.column.iter().all(|x| *x == F::ZERO));
+    }
+
+    #[test]
+    fn sha256_rn_maj_multiplicity_one_row_has_64_requests() {
+        let trace = one_row_trace(true);
+        for relation in [
+            Sha256RnRelation::MajI0Low,
+            Sha256RnRelation::MajI0High0,
+            Sha256RnRelation::MajI0High1,
+            Sha256RnRelation::MajI1Low0,
+            Sha256RnRelation::MajI1Low1,
+            Sha256RnRelation::MajI1High,
+        ] {
+            let mult = build_mult_trace(&trace, relation);
+            assert_eq!(
+                mult.column.iter().map(|x| x.to_usize()).sum::<usize>(),
+                SHA256_RN_COMPRESS_ROUNDS
+            );
+        }
+    }
+
+    #[test]
+    fn sha256_rn_maj_multiplicity_inactive_row_is_zero() {
+        let trace = one_row_trace(false);
+        for relation in [
+            Sha256RnRelation::MajI0Low,
+            Sha256RnRelation::MajI0High0,
+            Sha256RnRelation::MajI0High1,
+            Sha256RnRelation::MajI1Low0,
+            Sha256RnRelation::MajI1Low1,
+            Sha256RnRelation::MajI1High,
+        ] {
+            let mult = build_mult_trace(&trace, relation);
+            assert!(mult.column.iter().all(|x| *x == F::ZERO));
+        }
+    }
+
+    #[test]
+    fn sha256_rn_maj_virtual_columns_match_round_values() {
+        let h_in = [
+            0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+        ];
+        let block = [0u32; 16];
+        let witness = generate_sha256_compress_rn_witness(h_in, block);
+        let row = sha256_compress_rn_trace_row(F::ONE, F::ZERO, F::ZERO, F::ZERO, h_in, block);
+        let traces = rn_trace_from_row(row, witness.virtual_lookup_values);
+        let rn_trace = &traces[&Table::sha256_compress_rn()];
+        let c0 = &witness.compression[0];
+        let a_low = h_in[0] & LIMB_MASK;
+        let b_low = h_in[1] & LIMB_MASK;
+        let c_low = h_in[2] & LIMB_MASK;
+        let a_high = h_in[0] >> BITS_PER_LIMB;
+        let b_high = h_in[1] >> BITS_PER_LIMB;
+        let c_high = h_in[2] >> BITS_PER_LIMB;
+
+        assert_eq!(
+            tuple_from_trace(rn_trace, 0, Sha256RnRelation::MajI0Low, 0),
+            vec![
+                F::from_u32(a_low & BigSigma0::I0_L),
+                F::from_u32(b_low & BigSigma0::I0_L),
+                F::from_u32(c_low & BigSigma0::I0_L),
+                F::from_u32(c0.maj_i0_low),
+            ]
+        );
+        assert_eq!(
+            tuple_from_trace(rn_trace, 0, Sha256RnRelation::MajI1High, 0),
+            vec![
+                F::from_u32(a_high & BigSigma0::I1_H),
+                F::from_u32(b_high & BigSigma0::I1_H),
+                F::from_u32(c_high & BigSigma0::I1_H),
+                F::from_u32(c0.maj_i1_high),
+            ]
+        );
     }
 
     #[test]
