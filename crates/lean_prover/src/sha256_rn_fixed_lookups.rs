@@ -1005,20 +1005,14 @@ pub fn prove_sha256_rn_fixed_lookup(
             (fixed_point.clone(), BTreeMap::from([(0, mult_eval)])),
         ));
 
-        {
-            let direct_evals = fixed_columns(setup, relation)
+        debug_assert_eq!(
+            fixed_columns(setup, relation)
                 .iter()
                 .map(|col| col.evaluate(&fixed_point))
-                .collect::<Vec<_>>();
-            let closed_form_evals = eval_fixed_columns_closed_form(relation, &fixed_point.0);
-            assert_eq!(
-                direct_evals, closed_form_evals,
-                "{relation:?} closed-form fixed-column MLE does not match direct fixed-table MLE at prover GKR point"
-            );
-            for eval in direct_evals {
-                prover_state.add_extension_scalar(eval);
-            }
-        }
+                .collect::<Vec<_>>(),
+            eval_fixed_columns_closed_form(relation, &fixed_point.0),
+            "{relation:?} closed-form fixed-column MLE does not match direct fixed-table MLE at prover GKR point"
+        );
     }
 
     let point = MultilinearPoint(from_end(&gkr_point.0, log_n_rows).to_vec());
@@ -1078,10 +1072,8 @@ pub fn verify_sha256_rn_fixed_lookup(
         let multiplicity_idx = relation.multiplicity_index();
         let mult_eval = verifier_state.next_extension_scalar()?;
         table_mult_evals[multiplicity_idx] = mult_eval;
+        fixed_evals[multiplicity_idx] = eval_fixed_columns_closed_form(relation, &fixed_point.0);
         multiplicity_claims.push((multiplicity_idx, (fixed_point, BTreeMap::from([(0, mult_eval)]))));
-        for col_idx in 0..relation.arity() {
-            fixed_evals[multiplicity_idx][col_idx] = verifier_state.next_extension_scalar()?;
-        }
     }
 
     let rn_point = MultilinearPoint(from_end(&gkr_point.0, log_n_rows).to_vec());
