@@ -58,11 +58,14 @@ pub const SHA256_RN_VIRTUAL_SMALL_SIGMA1_I0_ARITY: usize = 5;
 pub const SHA256_RN_VIRTUAL_SMALL_SIGMA1_I1_ARITY: usize = 5;
 pub const SHA256_RN_VIRTUAL_SMALL_SIGMA1_O2_ARITY: usize = 4;
 pub const SHA256_RN_VIRTUAL_RANGE16_ARITY: usize = 1;
+pub const SHA256_RN_RANGE16_INPUT_REQUESTS: usize = SHA256_RN_STATE_LIMBS + SHA256_RN_BLOCK_LIMBS;
 pub const SHA256_RN_RANGE16_SCHEDULING_REQUESTS: usize = SHA256_RN_SCHEDULE_EXTENSIONS * 4;
 pub const SHA256_RN_RANGE16_COMPRESSION_REQUESTS: usize = SHA256_RN_COMPRESS_ROUNDS * 8;
 pub const SHA256_RN_RANGE16_OUTPUT_REQUESTS: usize = SHA256_RN_STATE_LIMBS;
-pub const SHA256_RN_RANGE16_REQUESTS_PER_ROW: usize =
-    SHA256_RN_RANGE16_SCHEDULING_REQUESTS + SHA256_RN_RANGE16_COMPRESSION_REQUESTS + SHA256_RN_RANGE16_OUTPUT_REQUESTS;
+pub const SHA256_RN_RANGE16_REQUESTS_PER_ROW: usize = SHA256_RN_RANGE16_INPUT_REQUESTS
+    + SHA256_RN_RANGE16_SCHEDULING_REQUESTS
+    + SHA256_RN_RANGE16_COMPRESSION_REQUESTS
+    + SHA256_RN_RANGE16_OUTPUT_REQUESTS;
 pub const SHA256_RN_VIRTUAL_BIG_SIGMA1_I0_START: usize = 0;
 pub const SHA256_RN_VIRTUAL_BIG_SIGMA1_I1_START: usize =
     SHA256_RN_VIRTUAL_BIG_SIGMA1_I0_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_BIG_SIGMA1_I0_ARITY;
@@ -372,6 +375,16 @@ pub fn generate_sha256_compress_rn_witness(
     let mut small_sigma1_i1 = Vec::with_capacity(SHA256_RN_SCHEDULE_EXTENSIONS);
     let mut small_sigma1_o2 = Vec::with_capacity(SHA256_RN_SCHEDULE_EXTENSIONS);
     let mut range16_values = Vec::with_capacity(SHA256_RN_RANGE16_REQUESTS_PER_ROW);
+    for word in h_in {
+        for limb in u32_to_u16_limbs_u32(word) {
+            range16_values.push(F::from_u32(limb));
+        }
+    }
+    for word in block {
+        for limb in u32_to_u16_limbs_u32(word) {
+            range16_values.push(F::from_u32(limb));
+        }
+    }
 
     for t in SHA256_RN_BLOCK_WORDS..SHA256_RN_COMPRESS_ROUNDS {
         let [w_16_low, w_16_high] = u32_to_u16_limbs_u32(w[t - 16]);

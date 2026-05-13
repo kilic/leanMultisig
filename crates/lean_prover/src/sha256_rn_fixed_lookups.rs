@@ -1597,6 +1597,12 @@ fn reconstruct_sha256_rn_range16_requests(
     let two_8 = EF::from_usize(1 << 8);
     let two_16 = EF::from_usize(1 << BITS_PER_LIMB);
     let mut requests = Vec::with_capacity(SHA256_RN_RANGE16_REQUESTS_PER_ROW);
+    for limbs in &cols.h_in {
+        requests.extend([limbs[0], limbs[1]]);
+    }
+    for word_idx in 0..SHA256_RN_BLOCK_WORDS {
+        requests.extend([cols.w[word_idx][0], cols.w[word_idx][1]]);
+    }
 
     for round in 0..SHA256_RN_SCHEDULE_EXTENSIONS {
         let s = &cols.scheduling[round];
@@ -2134,9 +2140,9 @@ mod tests {
     use super::*;
     use lean_vm::{
         SHA256_RN_COL_STATE_LIMBS_START, SHA256_RN_COL_W_START, SHA256_RN_K, SHA256_RN_RANGE16_COMPRESSION_REQUESTS,
-        SHA256_RN_RANGE16_SCHEDULING_REQUESTS, SHA256_RN_SCHEDULE_EXTENSIONS, SHA256_RN_STATE_LIMBS,
-        SHA256_RN_U32_LIMBS, SHA256_RN_WORDS, Sha256RnCompressionRoundCols, Sha256RnSchedulingRoundCols, Table,
-        generate_sha256_compress_rn_witness, sha256_compress_rn_trace_row,
+        SHA256_RN_RANGE16_INPUT_REQUESTS, SHA256_RN_RANGE16_SCHEDULING_REQUESTS, SHA256_RN_SCHEDULE_EXTENSIONS,
+        SHA256_RN_STATE_LIMBS, SHA256_RN_U32_LIMBS, SHA256_RN_WORDS, Sha256RnCompressionRoundCols,
+        Sha256RnSchedulingRoundCols, Table, generate_sha256_compress_rn_witness, sha256_compress_rn_trace_row,
     };
     use std::mem::size_of;
 
@@ -2768,7 +2774,7 @@ mod tests {
     }
 
     #[test]
-    fn sha256_rn_range16_multiplicity_one_row_has_720_requests() {
+    fn sha256_rn_range16_multiplicity_one_row_has_expected_requests() {
         let trace = one_row_trace(true);
         let mult = build_mult_trace(&trace, Sha256RnRelation::Range16);
         assert_eq!(
@@ -2799,22 +2805,40 @@ mod tests {
 
         assert_eq!(
             tuple_from_trace(rn_trace, 0, Sha256RnRelation::Range16, 0),
-            vec![F::from_u32(witness.w[16] & LIMB_MASK)]
+            vec![F::from_u32(h_in[0] & LIMB_MASK)]
         );
         assert_eq!(
             tuple_from_trace(rn_trace, 0, Sha256RnRelation::Range16, 1),
+            vec![F::from_u32(h_in[0] >> BITS_PER_LIMB)]
+        );
+        assert_eq!(
+            tuple_from_trace(rn_trace, 0, Sha256RnRelation::Range16, SHA256_RN_STATE_LIMBS),
+            vec![F::from_u32(block[0] & LIMB_MASK)]
+        );
+        assert_eq!(
+            tuple_from_trace(rn_trace, 0, Sha256RnRelation::Range16, SHA256_RN_STATE_LIMBS + 1),
+            vec![F::from_u32(block[0] >> BITS_PER_LIMB)]
+        );
+
+        let scheduling_start_slot = SHA256_RN_RANGE16_INPUT_REQUESTS;
+        assert_eq!(
+            tuple_from_trace(rn_trace, 0, Sha256RnRelation::Range16, scheduling_start_slot),
+            vec![F::from_u32(witness.w[16] & LIMB_MASK)]
+        );
+        assert_eq!(
+            tuple_from_trace(rn_trace, 0, Sha256RnRelation::Range16, scheduling_start_slot + 1),
             vec![F::from_u32(witness.w[16] >> BITS_PER_LIMB)]
         );
         assert_eq!(
-            tuple_from_trace(rn_trace, 0, Sha256RnRelation::Range16, 2),
+            tuple_from_trace(rn_trace, 0, Sha256RnRelation::Range16, scheduling_start_slot + 2),
             vec![F::from_u32(s0.carry_low)]
         );
         assert_eq!(
-            tuple_from_trace(rn_trace, 0, Sha256RnRelation::Range16, 3),
+            tuple_from_trace(rn_trace, 0, Sha256RnRelation::Range16, scheduling_start_slot + 3),
             vec![F::from_u32(s0.carry_high)]
         );
 
-        let compression_start_slot = SHA256_RN_RANGE16_SCHEDULING_REQUESTS;
+        let compression_start_slot = SHA256_RN_RANGE16_INPUT_REQUESTS + SHA256_RN_RANGE16_SCHEDULING_REQUESTS;
         let [d_low, d_high] = [F::from_u32(h_in[3] & LIMB_MASK), F::from_u32(h_in[3] >> BITS_PER_LIMB)];
         let [h_low, h_high] = [F::from_u32(h_in[7] & LIMB_MASK), F::from_u32(h_in[7] >> BITS_PER_LIMB)];
         let sigma_1_low = F::from_u32(c0.sigma_1_o0_low + c0.sigma_1_o1_low + c0.sigma_1_o2_low);
@@ -2841,7 +2865,9 @@ mod tests {
             vec![new_e_high]
         );
 
-        let output_start_slot = SHA256_RN_RANGE16_SCHEDULING_REQUESTS + SHA256_RN_RANGE16_COMPRESSION_REQUESTS;
+        let output_start_slot = SHA256_RN_RANGE16_INPUT_REQUESTS
+            + SHA256_RN_RANGE16_SCHEDULING_REQUESTS
+            + SHA256_RN_RANGE16_COMPRESSION_REQUESTS;
         assert_eq!(
             tuple_from_trace(rn_trace, 0, Sha256RnRelation::Range16, output_start_slot),
             vec![F::from_u32(witness.h_out[0] & LIMB_MASK)]
