@@ -144,13 +144,10 @@ fn prove_execution_inner(
             ]
         })
         .unwrap_or_default();
-    let multiplicity_layouts = multiplicity_traces
+    let aux_traces = multiplicity_traces
         .iter()
-        .map(|trace| trace.layout())
-        .collect::<Vec<_>>();
-    let multiplicity_columns = multiplicity_traces
-        .iter()
-        .map(|trace| trace.column.as_slice())
+        .cloned()
+        .map(|trace| trace.into_aux_trace())
         .collect::<Vec<_>>();
 
     // 1st Commitment
@@ -161,8 +158,7 @@ fn prove_execution_inner(
         &memory_acc,
         &bytecode_acc,
         &traces,
-        &multiplicity_layouts,
-        &multiplicity_columns,
+        &aux_traces,
     );
 
     // logup (GKR)
@@ -194,8 +190,7 @@ fn prove_execution_inner(
         );
     }
 
-    let mut multiplicity_committed_statements: MultiplicityCommittedStatements =
-        vec![Vec::new(); multiplicity_layouts.len()];
+    let mut aux_committed_statements: AuxCommittedStatements = vec![Vec::new(); aux_traces.len()];
 
     let bus_beta = prover_state.sample();
     let air_alpha = prover_state.sample();
@@ -284,7 +279,7 @@ fn prove_execution_inner(
                 BTreeMap::new(),
             ));
         for (multiplicity_idx, multiplicity_claim) in fixed_lookup_statements.multiplicity_claims {
-            multiplicity_committed_statements[multiplicity_idx].push(multiplicity_claim);
+            aux_committed_statements[multiplicity_idx].push(multiplicity_claim);
         }
     }
 
@@ -345,12 +340,9 @@ fn prove_execution_inner(
     for (table, statements) in &committed_statements {
         per_section.insert(StackSectionId::VmTable(*table), statements.clone());
     }
-    for (descriptor, statements) in multiplicity_layouts
-        .iter()
-        .zip(multiplicity_committed_statements.iter())
-    {
+    for (trace, statements) in aux_traces.iter().zip(aux_committed_statements.iter()) {
         per_section.insert(
-            descriptor.id,
+            trace.id,
             statements
                 .iter()
                 .map(|(point, eq_values)| (point.clone(), eq_values.clone(), BTreeMap::new()))

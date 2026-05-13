@@ -12,7 +12,7 @@ use lean_vm::{
 };
 use std::{borrow::Borrow, collections::BTreeMap};
 use sub_protocols::{
-    ENDIANNESS_PIVOT_GKR, StackSectionDescriptor, StackSectionId, prove_gkr_quotient, verify_gkr_quotient,
+    AuxTrace, ENDIANNESS_PIVOT_GKR, StackSectionDescriptor, StackSectionId, prove_gkr_quotient, verify_gkr_quotient,
 };
 use utils::{ToUsize, VarCount, finger_print, finger_print_packed, from_end};
 
@@ -151,11 +151,18 @@ pub struct MultiplicityTrace {
 }
 
 impl MultiplicityTrace {
-    pub fn layout(&self) -> StackSectionDescriptor {
-        StackSectionDescriptor {
-            id: self.relation.multiplicity_stack_section(),
+    pub fn into_aux_trace(self) -> AuxTrace {
+        AuxTrace {
+            id: StackSectionId::Aux(match self.relation {
+                Sha256RnRelation::BigSigma1I0 => SHA256_RN_BIG_SIGMA1_I0_MULT_SECTION,
+                Sha256RnRelation::BigSigma1I1 => SHA256_RN_BIG_SIGMA1_I1_MULT_SECTION,
+                Sha256RnRelation::BigSigma1O2 => SHA256_RN_BIG_SIGMA1_O2_MULT_SECTION,
+                Sha256RnRelation::BigSigma0I0 => SHA256_RN_BIG_SIGMA0_I0_MULT_SECTION,
+                Sha256RnRelation::BigSigma0I1 => SHA256_RN_BIG_SIGMA0_I1_MULT_SECTION,
+                Sha256RnRelation::BigSigma0O2 => SHA256_RN_BIG_SIGMA0_O2_MULT_SECTION,
+            }),
             log_n_rows: self.log_n_rows,
-            n_columns: 1,
+            columns: vec![self.column],
         }
     }
 }
@@ -359,7 +366,7 @@ pub fn setup_sha256_rn_fixed_lookups(_whir_config: &WhirConfigBuilder) -> Sha256
 
 pub fn sha256_rn_big_sigma0_i0_multiplicity_trace_layout() -> StackSectionDescriptor {
     StackSectionDescriptor {
-        id: Sha256RnRelation::BigSigma0I0.multiplicity_stack_section(),
+        id: StackSectionId::Aux(SHA256_RN_BIG_SIGMA0_I0_MULT_SECTION),
         log_n_rows: SHA256_RN_BIG_SIGMA0_I0_LOG_N_ROWS,
         n_columns: 1,
     }
@@ -367,7 +374,7 @@ pub fn sha256_rn_big_sigma0_i0_multiplicity_trace_layout() -> StackSectionDescri
 
 pub fn sha256_rn_big_sigma0_i1_multiplicity_trace_layout() -> StackSectionDescriptor {
     StackSectionDescriptor {
-        id: Sha256RnRelation::BigSigma0I1.multiplicity_stack_section(),
+        id: StackSectionId::Aux(SHA256_RN_BIG_SIGMA0_I1_MULT_SECTION),
         log_n_rows: SHA256_RN_BIG_SIGMA0_I1_LOG_N_ROWS,
         n_columns: 1,
     }
@@ -375,7 +382,7 @@ pub fn sha256_rn_big_sigma0_i1_multiplicity_trace_layout() -> StackSectionDescri
 
 pub fn sha256_rn_big_sigma0_o2_multiplicity_trace_layout() -> StackSectionDescriptor {
     StackSectionDescriptor {
-        id: Sha256RnRelation::BigSigma0O2.multiplicity_stack_section(),
+        id: StackSectionId::Aux(SHA256_RN_BIG_SIGMA0_O2_MULT_SECTION),
         log_n_rows: SHA256_RN_BIG_SIGMA0_O2_LOG_N_ROWS,
         n_columns: 1,
     }
@@ -383,7 +390,7 @@ pub fn sha256_rn_big_sigma0_o2_multiplicity_trace_layout() -> StackSectionDescri
 
 pub fn sha256_rn_big_sigma1_i0_multiplicity_trace_layout() -> StackSectionDescriptor {
     StackSectionDescriptor {
-        id: Sha256RnRelation::BigSigma1I0.multiplicity_stack_section(),
+        id: StackSectionId::Aux(SHA256_RN_BIG_SIGMA1_I0_MULT_SECTION),
         log_n_rows: SHA256_RN_BIG_SIGMA1_I0_LOG_N_ROWS,
         n_columns: 1,
     }
@@ -391,7 +398,7 @@ pub fn sha256_rn_big_sigma1_i0_multiplicity_trace_layout() -> StackSectionDescri
 
 pub fn sha256_rn_big_sigma1_i1_multiplicity_trace_layout() -> StackSectionDescriptor {
     StackSectionDescriptor {
-        id: Sha256RnRelation::BigSigma1I1.multiplicity_stack_section(),
+        id: StackSectionId::Aux(SHA256_RN_BIG_SIGMA1_I1_MULT_SECTION),
         log_n_rows: SHA256_RN_BIG_SIGMA1_I1_LOG_N_ROWS,
         n_columns: 1,
     }
@@ -399,7 +406,7 @@ pub fn sha256_rn_big_sigma1_i1_multiplicity_trace_layout() -> StackSectionDescri
 
 pub fn sha256_rn_big_sigma1_o2_multiplicity_trace_layout() -> StackSectionDescriptor {
     StackSectionDescriptor {
-        id: Sha256RnRelation::BigSigma1O2.multiplicity_stack_section(),
+        id: StackSectionId::Aux(SHA256_RN_BIG_SIGMA1_O2_MULT_SECTION),
         log_n_rows: SHA256_RN_BIG_SIGMA1_O2_LOG_N_ROWS,
         n_columns: 1,
     }
@@ -503,40 +510,6 @@ impl Sha256RnRelation {
             ),
         }
     }
-
-    fn request_source(self, round: usize, index: usize) -> Sha256RnLookupSource {
-        let (start, arity) = self.virtual_start_and_arity();
-        debug_assert!(index < arity);
-        Sha256RnLookupSource::VirtualCol(start + round * arity + index)
-    }
-
-    fn multiplicity_section_name(self) -> &'static str {
-        match self {
-            Self::BigSigma1I0 => SHA256_RN_BIG_SIGMA1_I0_MULT_SECTION,
-            Self::BigSigma1I1 => SHA256_RN_BIG_SIGMA1_I1_MULT_SECTION,
-            Self::BigSigma1O2 => SHA256_RN_BIG_SIGMA1_O2_MULT_SECTION,
-            Self::BigSigma0I0 => SHA256_RN_BIG_SIGMA0_I0_MULT_SECTION,
-            Self::BigSigma0I1 => SHA256_RN_BIG_SIGMA0_I1_MULT_SECTION,
-            Self::BigSigma0O2 => SHA256_RN_BIG_SIGMA0_O2_MULT_SECTION,
-        }
-    }
-
-    fn multiplicity_stack_section(self) -> StackSectionId {
-        StackSectionId::Multiplicity(self.multiplicity_section_name())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Sha256RnLookupSource {
-    VirtualCol(ColIndex),
-}
-
-impl Sha256RnLookupSource {
-    fn read(self, trace: &TableTrace, row: usize) -> F {
-        match self {
-            Self::VirtualCol(col) => trace.virtual_columns[col][row],
-        }
-    }
 }
 
 fn relations() -> [Sha256RnRelation; SHA256_RN_BIG_SIGMA_BATCH_N_AUX] {
@@ -554,10 +527,160 @@ fn fixed_columns(setup: &Sha256RnFixedLookupProverSetup, relation: Sha256RnRelat
     &setup.fixed_tables[&relation].columns
 }
 
+fn bit_from_scattered_mask(mask: u32, bit_position: usize, point: &[EF]) -> EF {
+    debug_assert_eq!(point.len(), mask.count_ones() as usize);
+    let bit = 1u32 << bit_position;
+    if mask & bit == 0 {
+        EF::ZERO
+    } else {
+        let row_bit_index = (mask & (bit - 1)).count_ones() as usize;
+        point[point.len() - 1 - row_bit_index]
+    }
+}
+
+fn xor2_mle(a: EF, b: EF) -> EF {
+    a + b - EF::from_usize(2) * a * b
+}
+
+fn xor3_mle(a: EF, b: EF, c: EF) -> EF {
+    xor2_mle(xor2_mle(a, b), c)
+}
+
+fn sigma_bit_mle(input_mask: u32, output_bit_position: usize, rotations: [usize; 3], point: &[EF]) -> EF {
+    xor3_mle(
+        bit_from_scattered_mask(input_mask, (output_bit_position + rotations[0]) % 32, point),
+        bit_from_scattered_mask(input_mask, (output_bit_position + rotations[1]) % 32, point),
+        bit_from_scattered_mask(input_mask, (output_bit_position + rotations[2]) % 32, point),
+    )
+}
+
+fn projected_input_mle(input_mask: u32, column_mask: u32, shift: usize, point: &[EF]) -> EF {
+    (0..32)
+        .filter(|&bit| column_mask & (1u32 << bit) != 0)
+        .map(|bit| EF::from_usize(1 << bit) * bit_from_scattered_mask(input_mask, shift + bit, point))
+        .sum()
+}
+
+fn projected_sigma_mle(input_mask: u32, output_mask: u32, column_mask: u32, shift: usize, point: &[EF]) -> EF {
+    (0..32)
+        .filter(|&bit| column_mask & (1u32 << bit) != 0)
+        .map(|bit| {
+            EF::from_usize(1 << bit) * sigma_bit_mle(input_mask, shift + bit, sigma_rotations(output_mask), point)
+        })
+        .sum()
+}
+
+fn sigma_rotations(output_mask: u32) -> [usize; 3] {
+    match output_mask {
+        BigSigma0::O2 => [2, 13, 22],
+        BigSigma1::O2 => [6, 11, 25],
+        _ => unreachable!("unsupported sigma output mask"),
+    }
+}
+
+fn pext_sigma_mle(input_mask: u32, output_mask: u32, point: &[EF]) -> EF {
+    let mut out_bit = 0;
+    let mut acc = EF::ZERO;
+    for bit in 0..32 {
+        if output_mask & (1u32 << bit) != 0 {
+            acc += EF::from_usize(1 << out_bit) * sigma_bit_mle(input_mask, bit, sigma_rotations(output_mask), point);
+            out_bit += 1;
+        }
+    }
+    acc
+}
+
+fn scattered_index_mle(point: &[EF]) -> EF {
+    (0..point.len())
+        .map(|row_bit_index| EF::from_usize(1 << row_bit_index) * point[point.len() - 1 - row_bit_index])
+        .sum()
+}
+
+fn o2_output_mle(o2_mask: u32, side_n_vars: usize, column_mask: u32, shift: usize, point: &[EF]) -> EF {
+    debug_assert_eq!(point.len(), 2 * side_n_vars);
+    let left_point = &point[..side_n_vars];
+    let right_point = &point[side_n_vars..];
+    (0..32)
+        .filter(|&bit| column_mask & (1u32 << bit) != 0)
+        .map(|bit| {
+            let left = bit_from_scattered_mask(o2_mask, shift + bit, left_point);
+            let right = bit_from_scattered_mask(o2_mask, shift + bit, right_point);
+            EF::from_usize(1 << bit) * xor2_mle(left, right)
+        })
+        .sum()
+}
+
+fn eval_fixed_columns_closed_form(relation: Sha256RnRelation, point: &[EF]) -> Vec<EF> {
+    match relation {
+        Sha256RnRelation::BigSigma0I0 => vec![
+            projected_input_mle(SHA256_RN_BIG_SIGMA0_I0, BigSigma0::I0_L, 0, point),
+            projected_input_mle(SHA256_RN_BIG_SIGMA0_I0, BigSigma0::I0_H0, BITS_PER_LIMB, point),
+            projected_input_mle(SHA256_RN_BIG_SIGMA0_I0, BigSigma0::I0_H1, 24, point),
+            projected_sigma_mle(SHA256_RN_BIG_SIGMA0_I0, BigSigma0::O2, BigSigma0::O0_L, 0, point),
+            projected_sigma_mle(
+                SHA256_RN_BIG_SIGMA0_I0,
+                BigSigma0::O2,
+                BigSigma0::O0_H,
+                BITS_PER_LIMB,
+                point,
+            ),
+            pext_sigma_mle(SHA256_RN_BIG_SIGMA0_I0, BigSigma0::O2, point),
+        ],
+        Sha256RnRelation::BigSigma0I1 => vec![
+            projected_input_mle(SHA256_RN_BIG_SIGMA0_I1, BigSigma0::I1_L0, 0, point),
+            projected_input_mle(SHA256_RN_BIG_SIGMA0_I1, BigSigma0::I1_L1, 8, point),
+            projected_input_mle(SHA256_RN_BIG_SIGMA0_I1, BigSigma0::I1_H, BITS_PER_LIMB, point),
+            projected_sigma_mle(SHA256_RN_BIG_SIGMA0_I1, BigSigma0::O2, BigSigma0::O1_L, 0, point),
+            projected_sigma_mle(
+                SHA256_RN_BIG_SIGMA0_I1,
+                BigSigma0::O2,
+                BigSigma0::O1_H,
+                BITS_PER_LIMB,
+                point,
+            ),
+            pext_sigma_mle(SHA256_RN_BIG_SIGMA0_I1, BigSigma0::O2, point),
+        ],
+        Sha256RnRelation::BigSigma0O2 => {
+            let side_n_vars = SHA256_RN_BIG_SIGMA0_O2_INPUT_LOG_N_ROWS;
+            vec![
+                scattered_index_mle(&point[..side_n_vars]),
+                scattered_index_mle(&point[side_n_vars..]),
+                o2_output_mle(BigSigma0::O2, side_n_vars, LIMB_MASK, 0, point),
+                o2_output_mle(BigSigma0::O2, side_n_vars, LIMB_MASK, BITS_PER_LIMB, point),
+            ]
+        }
+        Sha256RnRelation::BigSigma1I0 => vec![
+            projected_input_mle(BigSigma1::I0, BigSigma1::I0_L, 0, point),
+            projected_input_mle(BigSigma1::I0, BigSigma1::I0_H, BITS_PER_LIMB, point),
+            projected_sigma_mle(BigSigma1::I0, BigSigma1::O2, BigSigma1::O0_L, 0, point),
+            projected_sigma_mle(BigSigma1::I0, BigSigma1::O2, BigSigma1::O0_H, BITS_PER_LIMB, point),
+            pext_sigma_mle(BigSigma1::I0, BigSigma1::O2, point),
+        ],
+        Sha256RnRelation::BigSigma1I1 => vec![
+            projected_input_mle(BigSigma1::I1, BigSigma1::I1_L, 0, point),
+            projected_input_mle(BigSigma1::I1, BigSigma1::I1_H, BITS_PER_LIMB, point),
+            projected_sigma_mle(BigSigma1::I1, BigSigma1::O2, BigSigma1::O1_L, 0, point),
+            projected_sigma_mle(BigSigma1::I1, BigSigma1::O2, BigSigma1::O1_H, BITS_PER_LIMB, point),
+            pext_sigma_mle(BigSigma1::I1, BigSigma1::O2, point),
+        ],
+        Sha256RnRelation::BigSigma1O2 => {
+            let side_n_vars = SHA256_RN_BIG_SIGMA1_O2_INPUT_LOG_N_ROWS;
+            vec![
+                scattered_index_mle(&point[..side_n_vars]),
+                scattered_index_mle(&point[side_n_vars..]),
+                o2_output_mle(BigSigma1::O2, side_n_vars, LIMB_MASK, 0, point),
+                o2_output_mle(BigSigma1::O2, side_n_vars, LIMB_MASK, BITS_PER_LIMB, point),
+            ]
+        }
+    }
+}
+
 fn tuple_from_trace(trace: &TableTrace, row: usize, relation: Sha256RnRelation, round: usize) -> Vec<F> {
     let mut tuple = vec![F::ZERO; relation.arity()];
+    let (start, arity) = relation.virtual_start_and_arity();
     for (i, slot) in tuple.iter_mut().enumerate() {
-        *slot = relation.request_source(round, i).read(trace, row);
+        debug_assert!(i < arity);
+        *slot = trace.virtual_columns[start + round * arity + i][row];
     }
     tuple
 }
@@ -709,60 +832,6 @@ fn reconstruct_sha256_rn_compression_states(cols: &Sha256RnCols<EF>) -> [[EF; 16
     states
 }
 
-fn request_tuple_from_cols(
-    cols: &Sha256RnCols<EF>,
-    states: &[[EF; 16]; SHA256_RN_COMPRESS_ROUNDS],
-    relation: Sha256RnRelation,
-    round: usize,
-) -> Vec<EF> {
-    let two_8 = EF::from_usize(1 << 8);
-    let c = &cols.compression[round];
-    match relation {
-        Sha256RnRelation::BigSigma1I0 => vec![
-            c.e_i0_low,
-            c.e_i0_high,
-            c.sigma_1_o0_low,
-            c.sigma_1_o0_high,
-            c.sigma_1_o20_pext,
-        ],
-        Sha256RnRelation::BigSigma1I1 => vec![
-            states[round][8] - c.e_i0_low,
-            states[round][9] - c.e_i0_high,
-            c.sigma_1_o1_low,
-            c.sigma_1_o1_high,
-            c.sigma_1_o21_pext,
-        ],
-        Sha256RnRelation::BigSigma1O2 => vec![
-            c.sigma_1_o20_pext,
-            c.sigma_1_o21_pext,
-            c.sigma_1_o2_low,
-            c.sigma_1_o2_high,
-        ],
-        Sha256RnRelation::BigSigma0I0 => vec![
-            states[round][0] - c.a_i1_low_0 - c.a_i1_low_1 * two_8,
-            c.a_i0_high_0,
-            c.a_i0_high_1,
-            c.sigma_0_o0_low,
-            c.sigma_0_o0_high,
-            c.sigma_0_o20_pext,
-        ],
-        Sha256RnRelation::BigSigma0I1 => vec![
-            c.a_i1_low_0,
-            c.a_i1_low_1,
-            states[round][1] - c.a_i0_high_0 - c.a_i0_high_1 * two_8,
-            c.sigma_0_o1_low,
-            c.sigma_0_o1_high,
-            c.sigma_0_o21_pext,
-        ],
-        Sha256RnRelation::BigSigma0O2 => vec![
-            c.sigma_0_o20_pext,
-            c.sigma_0_o21_pext,
-            c.sigma_0_o2_low,
-            c.sigma_0_o2_high,
-        ],
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LogupSection {
     Table(Sha256RnRelation),
@@ -796,15 +865,6 @@ fn logup_sections(log_n_rows: usize) -> Vec<LogupSection> {
     }
     sections.sort_by_key(|section| section.order_key(log_n_rows));
     sections
-}
-
-fn fingerprint_packed(
-    relation: Sha256RnRelation,
-    values: &[PFPacking<EF>],
-    alphas_packed: &[EFPacking<EF>],
-) -> EFPacking<EF> {
-    let table_contrib = *alphas_packed.last().unwrap() * EFPacking::<EF>::from(EF::from(relation.domain_separator()));
-    finger_print_packed::<EF>(table_contrib, values, alphas_packed)
 }
 
 #[derive(Debug, Clone)]
@@ -885,7 +945,9 @@ pub fn prove_sha256_rn_fixed_lookup(
                         for (col_idx, col) in columns.iter().take(relation.arity()).enumerate() {
                             values[col_idx] = PFPacking::<EF>::from_fn(|w| col[src_idx(p, w)]);
                         }
-                        *slot = c_packed - fingerprint_packed(relation, &values, &alphas_packed);
+                        let table_contrib =
+                            EFPacking::<EF>::from(*alphas_eq_poly.last().unwrap() * relation.domain_separator());
+                        *slot = c_packed - finger_print_packed::<EF>(table_contrib, &values, &alphas_packed);
                     });
                 offset += section_n_rows;
             }
@@ -909,7 +971,9 @@ pub fn prove_sha256_rn_fixed_lookup(
                                 tuple_from_trace(trace, src_idx(p, w), relation, round)[value_idx]
                             });
                         }
-                        *slot = c_packed - fingerprint_packed(relation, &values, &alphas_packed);
+                        let table_contrib =
+                            EFPacking::<EF>::from(*alphas_eq_poly.last().unwrap() * relation.domain_separator());
+                        *slot = c_packed - finger_print_packed::<EF>(table_contrib, &values, &alphas_packed);
                     });
                 offset += n_rows;
             }
@@ -941,8 +1005,19 @@ pub fn prove_sha256_rn_fixed_lookup(
             (fixed_point.clone(), BTreeMap::from([(0, mult_eval)])),
         ));
 
-        for col in fixed_columns(setup, relation) {
-            prover_state.add_extension_scalar(col.evaluate(&fixed_point));
+        {
+            let direct_evals = fixed_columns(setup, relation)
+                .iter()
+                .map(|col| col.evaluate(&fixed_point))
+                .collect::<Vec<_>>();
+            let closed_form_evals = eval_fixed_columns_closed_form(relation, &fixed_point.0);
+            assert_eq!(
+                direct_evals, closed_form_evals,
+                "{relation:?} closed-form fixed-column MLE does not match direct fixed-table MLE at prover GKR point"
+            );
+            for eval in direct_evals {
+                prover_state.add_extension_scalar(eval);
+            }
         }
     }
 
@@ -1034,7 +1109,52 @@ pub fn verify_sha256_rn_fixed_lookup(
                     ));
             }
             LogupSection::Request { relation, round } => {
-                let values = request_tuple_from_cols(&rn_cols.sha, &rn_states, relation, round);
+                let c_round = &rn_cols.sha.compression[round];
+                let two_8 = EF::from_usize(1 << 8);
+                let values = match relation {
+                    Sha256RnRelation::BigSigma1I0 => vec![
+                        c_round.e_i0_low,
+                        c_round.e_i0_high,
+                        c_round.sigma_1_o0_low,
+                        c_round.sigma_1_o0_high,
+                        c_round.sigma_1_o20_pext,
+                    ],
+                    Sha256RnRelation::BigSigma1I1 => vec![
+                        rn_states[round][8] - c_round.e_i0_low,
+                        rn_states[round][9] - c_round.e_i0_high,
+                        c_round.sigma_1_o1_low,
+                        c_round.sigma_1_o1_high,
+                        c_round.sigma_1_o21_pext,
+                    ],
+                    Sha256RnRelation::BigSigma1O2 => vec![
+                        c_round.sigma_1_o20_pext,
+                        c_round.sigma_1_o21_pext,
+                        c_round.sigma_1_o2_low,
+                        c_round.sigma_1_o2_high,
+                    ],
+                    Sha256RnRelation::BigSigma0I0 => vec![
+                        rn_states[round][0] - c_round.a_i1_low_0 - c_round.a_i1_low_1 * two_8,
+                        c_round.a_i0_high_0,
+                        c_round.a_i0_high_1,
+                        c_round.sigma_0_o0_low,
+                        c_round.sigma_0_o0_high,
+                        c_round.sigma_0_o20_pext,
+                    ],
+                    Sha256RnRelation::BigSigma0I1 => vec![
+                        c_round.a_i1_low_0,
+                        c_round.a_i1_low_1,
+                        rn_states[round][1] - c_round.a_i0_high_0 - c_round.a_i0_high_1 * two_8,
+                        c_round.sigma_0_o1_low,
+                        c_round.sigma_0_o1_high,
+                        c_round.sigma_0_o21_pext,
+                    ],
+                    Sha256RnRelation::BigSigma0O2 => vec![
+                        c_round.sigma_0_o20_pext,
+                        c_round.sigma_0_o21_pext,
+                        c_round.sigma_0_o2_low,
+                        c_round.sigma_0_o2_high,
+                    ],
+                };
                 retrieved_numerators_value += pref * rn_cols.flag;
                 retrieved_denominators_value +=
                     pref * (c - finger_print(relation.domain_separator(), &values, &alphas_eq_poly));
@@ -1163,6 +1283,54 @@ mod tests {
         assert_eq!(columns.o2[1][o2_row], F::from_usize(right_idx));
         assert_eq!(columns.o2[2][o2_row], F::from_u32(xor & LIMB_MASK));
         assert_eq!(columns.o2[3][o2_row], F::from_u32(xor >> BITS_PER_LIMB));
+    }
+
+    #[test]
+    fn big_sigma0_closed_form_mle_matches_direct_mle() {
+        let columns = Sha256RnFixedLookupColumns::generate_big_sigma0();
+        let cases = [
+            (Sha256RnRelation::BigSigma0I0, columns.i0.as_slice()),
+            (Sha256RnRelation::BigSigma0I1, columns.i1.as_slice()),
+            (Sha256RnRelation::BigSigma0O2, columns.o2.as_slice()),
+        ];
+
+        for (relation, columns) in cases {
+            let point = (0..relation.log_n_rows())
+                .map(|i| EF::from_usize(17 * i + 5))
+                .collect::<Vec<_>>();
+            let closed_form = eval_fixed_columns_closed_form(relation, &point);
+            assert_eq!(closed_form.len(), columns.len());
+
+            for (col_idx, (column, closed)) in columns.iter().zip(closed_form.iter()).enumerate() {
+                let direct = column.evaluate(&MultilinearPoint(point.clone()));
+                println!("{relation:?} col {col_idx}: direct={direct:?}, closed_form={closed:?}");
+                assert_eq!(direct, *closed);
+            }
+        }
+    }
+
+    #[test]
+    fn big_sigma1_closed_form_mle_matches_direct_mle() {
+        let columns = Sha256RnFixedLookupColumns::generate_big_sigma1();
+        let cases = [
+            (Sha256RnRelation::BigSigma1I0, columns.i0.as_slice()),
+            (Sha256RnRelation::BigSigma1I1, columns.i1.as_slice()),
+            (Sha256RnRelation::BigSigma1O2, columns.o2.as_slice()),
+        ];
+
+        for (relation, columns) in cases {
+            let point = (0..relation.log_n_rows())
+                .map(|i| EF::from_usize(19 * i + 7))
+                .collect::<Vec<_>>();
+            let closed_form = eval_fixed_columns_closed_form(relation, &point);
+            assert_eq!(closed_form.len(), columns.len());
+
+            for (col_idx, (column, closed)) in columns.iter().zip(closed_form.iter()).enumerate() {
+                let direct = column.evaluate(&MultilinearPoint(point.clone()));
+                println!("{relation:?} col {col_idx}: direct={direct:?}, closed_form={closed:?}");
+                assert_eq!(direct, *closed);
+            }
+        }
     }
 
     #[test]

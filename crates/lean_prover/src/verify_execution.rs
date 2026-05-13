@@ -89,7 +89,7 @@ fn verify_execution_inner(
         return Err(ProofError::InvalidProof);
     }
 
-    let multiplicity_layouts = sha256_rn_fixed_lookups
+    let aux_layouts = sha256_rn_fixed_lookups
         .map(|_| {
             vec![
                 sha256_rn_big_sigma1_i0_multiplicity_trace_layout(),
@@ -102,7 +102,7 @@ fn verify_execution_inner(
         })
         .unwrap_or_default();
 
-    let stack_layout = compute_stack_layout(log_memory, bytecode.log_size(), &table_n_vars, &multiplicity_layouts);
+    let stack_layout = compute_stack_layout(log_memory, bytecode.log_size(), &table_n_vars, &aux_layouts);
     let parsed_commitment =
         stacked_pcs_parse_commitment(&whir_config, &mut verifier_state, stack_layout.stacked_n_vars)?;
 
@@ -133,8 +133,7 @@ fn verify_execution_inner(
         );
     }
 
-    let mut multiplicity_committed_statements: MultiplicityCommittedStatements =
-        vec![Vec::new(); multiplicity_layouts.len()];
+    let mut aux_committed_statements: AuxCommittedStatements = vec![Vec::new(); aux_layouts.len()];
 
     let bus_beta = verifier_state.sample();
     let air_alpha = verifier_state.sample();
@@ -225,7 +224,7 @@ fn verify_execution_inner(
                 BTreeMap::new(),
             ));
         for (multiplicity_idx, multiplicity_claim) in fixed_lookup_statements.multiplicity_claims {
-            multiplicity_committed_statements[multiplicity_idx].push(multiplicity_claim);
+            aux_committed_statements[multiplicity_idx].push(multiplicity_claim);
         }
     }
 
@@ -286,10 +285,7 @@ fn verify_execution_inner(
     for (table, statements) in &committed_statements {
         per_section.insert(StackSectionId::VmTable(*table), statements.clone());
     }
-    for (descriptor, statements) in multiplicity_layouts
-        .iter()
-        .zip(multiplicity_committed_statements.iter())
-    {
+    for (descriptor, statements) in aux_layouts.iter().zip(aux_committed_statements.iter()) {
         per_section.insert(
             descriptor.id,
             statements
@@ -303,7 +299,7 @@ fn verify_execution_inner(
 
     // sanity check (not necessary for soundness)
     let num_whir_statements = global_statements_base.iter().map(|s| s.values.len()).sum::<usize>();
-    if multiplicity_layouts.is_empty() {
+    if aux_layouts.is_empty() {
         assert_eq!(num_whir_statements, total_whir_statements(&[]));
     }
 
