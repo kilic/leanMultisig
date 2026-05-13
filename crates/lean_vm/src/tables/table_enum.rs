@@ -90,6 +90,9 @@ impl TableT for Table {
     fn padding_row(&self, padding: &PaddingMemory) -> Vec<PF<EF>> {
         delegate_to_inner!(self, padding_row, padding)
     }
+    fn virtual_padding_row(&self, padding: &PaddingMemory) -> Vec<PF<EF>> {
+        delegate_to_inner!(self, virtual_padding_row, padding)
+    }
     fn execute<M: MemoryAccess>(
         &self,
         arg_a: F,
@@ -102,6 +105,9 @@ impl TableT for Table {
     }
     fn n_columns_total(&self) -> usize {
         delegate_to_inner!(self, n_columns_total)
+    }
+    fn n_virtual_columns(&self) -> usize {
+        delegate_to_inner!(self, n_virtual_columns)
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::{
     default_whir_config,
     prove_execution::{prove_execution, prove_execution_with_sha256_rn_fixed_lookups},
-    sha256_rn_fixed_lookups::setup_sha256_rn_fixed_lookups,
+    sha256_rn_fixed_lookups::{Sha256RnRelation, setup_sha256_rn_fixed_lookups},
     verify_execution::{verify_execution, verify_execution_with_sha256_rn_fixed_lookups},
 };
 use backend::*;
@@ -168,7 +168,11 @@ def main():
     .unwrap();
 
     let mut tampered_setup = setup.verifier_setup().clone();
-    tampered_setup.range_check_add.root[0] += F::ONE;
+    tampered_setup
+        .fixed_tables
+        .get_mut(&Sha256RnRelation::BigSigma1I0)
+        .unwrap()
+        .log_n_rows += 1;
     assert!(
         verify_execution_with_sha256_rn_fixed_lookups(&bytecode, &public_input, proof.proof, &tampered_setup).is_err()
     );

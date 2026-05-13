@@ -95,6 +95,9 @@ impl Trace {
             for (col, new_data) in mine.columns.iter_mut().zip(other_t.columns) {
                 col.extend(new_data);
             }
+            for (col, new_data) in mine.virtual_columns.iter_mut().zip(other_t.virtual_columns) {
+                col.extend(new_data);
+            }
         }
     }
 }

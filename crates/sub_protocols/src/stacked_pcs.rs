@@ -25,7 +25,7 @@ pub enum StackSectionId {
     Memory,
     BytecodeAcc,
     VmTable(Table),
-    Aux(&'static str),
+    Multiplicity(&'static str),
 }
 
 impl fmt::Display for StackSectionId {
@@ -34,7 +34,7 @@ impl fmt::Display for StackSectionId {
             Self::Memory => write!(f, "memory"),
             Self::BytecodeAcc => write!(f, "bytecode_acc"),
             Self::VmTable(table) => write!(f, "{}", table.name()),
-            Self::Aux(label) => write!(f, "{label}"),
+            Self::Multiplicity(relation) => write!(f, "{relation}"),
         }
     }
 }
@@ -60,13 +60,6 @@ pub struct StackSectionLayout {
     pub offset: usize,
 }
 
-#[derive(Debug, Clone)]
-pub struct AuxTrace {
-    pub label: &'static str,
-    pub log_n_rows: VarCount,
-    pub columns: Vec<Vec<F>>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StackSectionDescriptor {
     pub id: StackSectionId,
@@ -74,7 +67,7 @@ pub struct StackSectionDescriptor {
     pub n_columns: usize,
 }
 
-pub type AuxCommittedStatements = Vec<Vec<(MultilinearPoint<EF>, BTreeMap<ColIndex, EF>)>>;
+pub type MultiplicityCommittedStatements = Vec<Vec<(MultilinearPoint<EF>, BTreeMap<ColIndex, EF>)>>;
 
 impl StackLayout {
     pub fn section(&self, id: StackSectionId) -> &StackSectionLayout {
@@ -168,13 +161,21 @@ pub fn stack_polynomials_and_commit(
     memory_acc: &[F],
     bytecode_acc: &[F],
     traces: &BTreeMap<Table, TableTrace>,
-    aux_traces: &[AuxTrace],
+    multiplicity_layouts: &[StackSectionDescriptor],
+    multiplicity_columns: &[&[F]],
 ) -> StackedPcsWitness {
     assert_eq!(memory.len(), memory_acc.len());
     assert_eq!(1 << log2_strict_usize(memory.len()), memory.len());
     assert_eq!(1 << log2_strict_usize(bytecode_acc.len()), bytecode_acc.len());
 
-    let sections = stack_sections(memory, memory_acc, bytecode_acc, traces, aux_traces);
+    let sections = stack_sections(
+        memory,
+        memory_acc,
+        bytecode_acc,
+        traces,
+        multiplicity_layouts,
+        multiplicity_columns,
+    );
     let (layout, global_polynomial) = stack_section_polynomials(&sections);
     tracing::info!("{}", layout.display().green());
     tracing::info!(
@@ -190,11 +191,9 @@ pub fn stack_polynomials_and_commit(
 
     let global_polynomial = MleOwned::Base(global_polynomial);
 
-    let inner_witness = WhirConfig::new(whir_config_builder, layout.stacked_n_vars).commit(
-        prover_state,
-        &global_polynomial,
-        layout.actual_data_len,
-    );
+    let inner_witness = WhirConfig::new(whir_config_builder, layout.stacked_n_vars)
+        .commit_with_ood(prover_state, &global_polynomial, layout.actual_data_len)
+        .0;
     StackedPcsWitness {
         stacked_n_vars: layout.stacked_n_vars,
         inner_witness,
@@ -220,12 +219,12 @@ pub fn compute_stack_layout(
     log_memory: usize,
     log_bytecode: usize,
     tables_log_heights: &BTreeMap<Table, VarCount>,
-    aux_layouts: &[StackSectionDescriptor],
+    multiplicity_layouts: &[StackSectionDescriptor],
 ) -> StackLayout {
     assert!(
-        aux_layouts
+        multiplicity_layouts
             .iter()
-            .all(|layout| matches!(layout.id, StackSectionId::Aux(_)))
+            .all(|layout| matches!(layout.id, StackSectionId::Multiplicity(_)))
     );
     let mut sections = vec![
         StackSectionLayout {
@@ -251,7 +250,7 @@ pub fn compute_stack_layout(
                 offset: 0,
             }),
     );
-    sections.extend(aux_layouts.iter().map(|layout| StackSectionLayout {
+    sections.extend(multiplicity_layouts.iter().map(|layout| StackSectionLayout {
         id: layout.id,
         log_n_rows: layout.log_n_rows,
         n_columns: layout.n_columns,
@@ -281,8 +280,15 @@ fn stack_sections<'a>(
     memory_acc: &'a [F],
     bytecode_acc: &'a [F],
     traces: &'a BTreeMap<Table, TableTrace>,
-    aux_traces: &'a [AuxTrace],
+    multiplicity_layouts: &'a [StackSectionDescriptor],
+    multiplicity_columns: &'a [&'a [F]],
 ) -> Vec<StackSectionData<'a>> {
+    assert_eq!(multiplicity_layouts.len(), multiplicity_columns.len());
+    assert!(
+        multiplicity_layouts
+            .iter()
+            .all(|layout| matches!(layout.id, StackSectionId::Multiplicity(_)) && layout.n_columns == 1)
+    );
     let mut sections = vec![
         StackSectionData {
             id: StackSectionId::Memory,
@@ -300,11 +306,16 @@ fn stack_sections<'a>(
         log_n_rows: trace.log_n_rows,
         columns: trace.columns[..table.n_columns()].iter().map(Vec::as_slice).collect(),
     }));
-    sections.extend(aux_traces.iter().map(|trace| StackSectionData {
-        id: StackSectionId::Aux(trace.label),
-        log_n_rows: trace.log_n_rows,
-        columns: trace.columns.iter().map(Vec::as_slice).collect(),
-    }));
+    sections.extend(
+        multiplicity_layouts
+            .iter()
+            .zip(multiplicity_columns)
+            .map(|(layout, column)| StackSectionData {
+                id: layout.id,
+                log_n_rows: layout.log_n_rows,
+                columns: vec![*column],
+            }),
+    );
     sections
 }
 
@@ -335,16 +346,6 @@ fn stack_section_polynomials(sections: &[StackSectionData<'_>]) -> (StackLayout,
     (layout, global_polynomial)
 }
 
-impl From<&AuxTrace> for StackSectionDescriptor {
-    fn from(trace: &AuxTrace) -> Self {
-        Self {
-            id: StackSectionId::Aux(trace.label),
-            log_n_rows: trace.log_n_rows,
-            n_columns: trace.columns.len(),
-        }
-    }
-}
-
 pub fn min_stacked_n_vars(log_bytecode: usize) -> usize {
     let mut min_tables_log_heights = BTreeMap::new();
     for table in ALL_TABLES {
@@ -353,11 +354,11 @@ pub fn min_stacked_n_vars(log_bytecode: usize) -> usize {
     compute_stack_layout(MIN_LOG_MEMORY_SIZE, log_bytecode, &min_tables_log_heights, &[]).stacked_n_vars
 }
 
-pub fn total_whir_statements(aux_layouts: &[StackSectionDescriptor]) -> usize {
+pub fn total_whir_statements(multiplicity_layouts: &[StackSectionDescriptor]) -> usize {
     assert!(
-        aux_layouts
+        multiplicity_layouts
             .iter()
-            .all(|layout| matches!(layout.id, StackSectionId::Aux(_)))
+            .all(|layout| matches!(layout.id, StackSectionId::Multiplicity(_)))
     );
     6 // memory + memory_acc + public_memory + bytecode_acc + pc_start + pc_end
      + ALL_TABLES
@@ -373,7 +374,7 @@ pub fn total_whir_statements(aux_layouts: &[StackSectionDescriptor]) -> usize {
         // bytecode lookup
         + 1 // PC
         + N_INSTRUCTION_COLUMNS
-        + aux_layouts.iter().map(|layout| layout.n_columns).sum::<usize>()
+        + multiplicity_layouts.iter().map(|layout| layout.n_columns).sum::<usize>()
 }
 
 #[cfg(test)]
@@ -390,13 +391,13 @@ mod tests {
         table_heights.insert(Table::execution(), 8);
         table_heights.insert(Table::poseidon16(), 10);
         table_heights.insert(Table::extension_op(), 7);
-        let aux_layouts = [StackSectionDescriptor {
-            id: StackSectionId::Aux("aux"),
+        let multiplicity_layouts = [StackSectionDescriptor {
+            id: StackSectionId::Multiplicity("test_mult"),
             log_n_rows: 9,
             n_columns: 1,
         }];
 
-        let layout = compute_stack_layout(6, 5, &table_heights, &aux_layouts);
+        let layout = compute_stack_layout(6, 5, &table_heights, &multiplicity_layouts);
         let heights = layout
             .sections
             .iter()
@@ -413,7 +414,7 @@ mod tests {
         let memory = range_col(0, 8);
         let memory_acc = range_col(100, 8);
         let bytecode_acc = range_col(200, 4);
-        let aux = range_col(300, 16);
+        let mult = range_col(300, 16);
         let sections = vec![
             StackSectionData {
                 id: StackSectionId::Memory,
@@ -426,9 +427,9 @@ mod tests {
                 columns: vec![&bytecode_acc],
             },
             StackSectionData {
-                id: StackSectionId::Aux("aux"),
+                id: StackSectionId::Multiplicity("test_mult"),
                 log_n_rows: 4,
-                columns: vec![&aux],
+                columns: vec![&mult],
             },
         ];
 
@@ -438,8 +439,11 @@ mod tests {
         let zero_point_2 = MultilinearPoint(vec![EF::ZERO; 2]);
 
         assert_eq!(
-            global.evaluate_sparse(layout.sparse_selector(StackSectionId::Aux("aux"), 0), &zero_point_4),
-            EF::from(aux[0])
+            global.evaluate_sparse(
+                layout.sparse_selector(StackSectionId::Multiplicity("test_mult"), 0),
+                &zero_point_4
+            ),
+            EF::from(mult[0])
         );
         assert_eq!(
             global.evaluate_sparse(layout.sparse_selector(StackSectionId::Memory, 0), &zero_point_3),

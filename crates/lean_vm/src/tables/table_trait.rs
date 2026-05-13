@@ -58,6 +58,7 @@ pub struct PaddingMemory {
 #[derive(Debug, Default)]
 pub struct TableTrace {
     pub columns: Vec<Vec<F>>,
+    pub virtual_columns: Vec<Vec<F>>,
     pub non_padded_n_rows: usize,
     pub log_n_rows: VarCount,
 }
@@ -66,6 +67,7 @@ impl TableTrace {
     pub fn new<A: TableT>(air: &A) -> Self {
         Self {
             columns: vec![Vec::new(); air.n_columns_total()],
+            virtual_columns: vec![Vec::new(); air.n_virtual_columns()],
             non_padded_n_rows: 0, // filled later
             log_n_rows: 0,        // filled later
         }
@@ -136,6 +138,9 @@ pub trait TableT: Air {
     fn lookups(&self) -> Vec<LookupIntoMemory>;
     fn bus(&self) -> Bus;
     fn padding_row(&self, padding: &PaddingMemory) -> Vec<F>;
+    fn virtual_padding_row(&self, _padding: &PaddingMemory) -> Vec<F> {
+        vec![F::ZERO; self.n_virtual_columns()]
+    }
     fn execute<M: MemoryAccess>(
         &self,
         arg_a: F,
@@ -148,6 +153,10 @@ pub trait TableT: Air {
     // number of columns committed + potentially some virtual columns (useful to keep in memory for logup)
     fn n_columns_total(&self) -> usize {
         self.n_columns()
+    }
+
+    fn n_virtual_columns(&self) -> usize {
+        0
     }
 
     fn is_execution_table(&self) -> bool {

@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 
 use crate::sha256_rn_fixed_lookups::{
-    SHA256_RN_RANGE_CHECK_ADD_STACKED_N_VARS, Sha256RnFixedLookupProverSetup, build_sha256_rn_add4_carry_4_mult_trace,
-    prove_sha256_rn_add4_fixed_lookup,
+    Sha256RnFixedLookupProverSetup, build_sha256_rn_big_sigma0_i0_mult_trace, build_sha256_rn_big_sigma0_i1_mult_trace,
+    build_sha256_rn_big_sigma0_o2_mult_trace, build_sha256_rn_big_sigma1_i0_mult_trace,
+    build_sha256_rn_big_sigma1_i1_mult_trace, build_sha256_rn_big_sigma1_o2_mult_trace, prove_sha256_rn_fixed_lookup,
 };
 use crate::*;
 use lean_vm::*;
@@ -130,10 +131,27 @@ fn prove_execution_inner(
         }
     });
 
-    let aux_traces = sha256_rn_fixed_lookups
-        .map(|_| vec![build_sha256_rn_add4_carry_4_mult_trace(&traces)])
+    let multiplicity_traces = sha256_rn_fixed_lookups
+        .map(|_| {
+            let trace = &traces[&Table::sha256_compress_rn()];
+            vec![
+                build_sha256_rn_big_sigma1_i0_mult_trace(trace),
+                build_sha256_rn_big_sigma1_i1_mult_trace(trace),
+                build_sha256_rn_big_sigma1_o2_mult_trace(trace),
+                build_sha256_rn_big_sigma0_i0_mult_trace(trace),
+                build_sha256_rn_big_sigma0_i1_mult_trace(trace),
+                build_sha256_rn_big_sigma0_o2_mult_trace(trace),
+            ]
+        })
         .unwrap_or_default();
-    let aux_layouts = aux_traces.iter().map(StackSectionDescriptor::from).collect::<Vec<_>>();
+    let multiplicity_layouts = multiplicity_traces
+        .iter()
+        .map(|trace| trace.layout())
+        .collect::<Vec<_>>();
+    let multiplicity_columns = multiplicity_traces
+        .iter()
+        .map(|trace| trace.column.as_slice())
+        .collect::<Vec<_>>();
 
     // 1st Commitment
     let stacked_pcs_witness = stack_polynomials_and_commit(
@@ -143,7 +161,8 @@ fn prove_execution_inner(
         &memory_acc,
         &bytecode_acc,
         &traces,
-        &aux_traces,
+        &multiplicity_layouts,
+        &multiplicity_columns,
     );
 
     // logup (GKR)
@@ -175,8 +194,8 @@ fn prove_execution_inner(
         );
     }
 
-    let mut aux_committed_statements: AuxCommittedStatements = vec![Vec::new(); aux_layouts.len()];
-    let mut setup_statements = Vec::new();
+    let mut multiplicity_committed_statements: MultiplicityCommittedStatements =
+        vec![Vec::new(); multiplicity_layouts.len()];
 
     let bus_beta = prover_state.sample();
     let air_alpha = prover_state.sample();
@@ -250,14 +269,23 @@ fn prove_execution_inner(
     }
 
     if let Some(fixed_lookups) = sha256_rn_fixed_lookups {
-        let add4_statements =
-            prove_sha256_rn_add4_fixed_lookup(&mut prover_state, &traces, &aux_traces[0], fixed_lookups);
+        let fixed_lookup_statements = prove_sha256_rn_fixed_lookup(
+            &mut prover_state,
+            &traces[&Table::sha256_compress_rn()],
+            &multiplicity_traces,
+            fixed_lookups,
+        );
         committed_statements
             .get_mut(&Table::sha256_compress_rn())
             .unwrap()
-            .push((add4_statements.rn_claim.0, add4_statements.rn_claim.1, BTreeMap::new()));
-        aux_committed_statements[0].push(add4_statements.aux_claim);
-        setup_statements.extend(add4_statements.setup_statements);
+            .push((
+                fixed_lookup_statements.rn_claim.0,
+                fixed_lookup_statements.rn_claim.1,
+                BTreeMap::new(),
+            ));
+        for (multiplicity_idx, multiplicity_claim) in fixed_lookup_statements.multiplicity_claims {
+            multiplicity_committed_statements[multiplicity_idx].push(multiplicity_claim);
+        }
     }
 
     let public_memory_random_point = MultilinearPoint(prover_state.sample_vec(log2_strict_usize(public_memory_size)));
@@ -317,7 +345,10 @@ fn prove_execution_inner(
     for (table, statements) in &committed_statements {
         per_section.insert(StackSectionId::VmTable(*table), statements.clone());
     }
-    for (descriptor, statements) in aux_layouts.iter().zip(aux_committed_statements.iter()) {
+    for (descriptor, statements) in multiplicity_layouts
+        .iter()
+        .zip(multiplicity_committed_statements.iter())
+    {
         per_section.insert(
             descriptor.id,
             statements
@@ -335,16 +366,6 @@ fn prove_execution_inner(
         stacked_pcs_witness.inner_witness,
         &stacked_pcs_witness.global_polynomial.by_ref(),
     );
-
-    if let Some(fixed_lookups) = sha256_rn_fixed_lookups {
-        let setup_polynomial = MleOwned::Base(fixed_lookups.range_check_add.polynomial.clone());
-        WhirConfig::new(whir_config, SHA256_RN_RANGE_CHECK_ADD_STACKED_N_VARS).prove(
-            &mut prover_state,
-            setup_statements,
-            fixed_lookups.range_check_add.whir_witness.clone(),
-            &setup_polynomial.by_ref(),
-        );
-    }
 
     ExecutionProof {
         proof: prover_state.into_proof(),

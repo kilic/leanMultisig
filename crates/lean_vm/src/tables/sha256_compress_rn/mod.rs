@@ -28,10 +28,30 @@ pub const SHA256_RN_BLOCK_LIMBS: usize = SHA256_RN_BLOCK_WORDS * SHA256_RN_U32_L
 pub const SHA256_RN_PRECOMPILE_DATA: usize = 6;
 pub const SHA256_COMPRESS_RN_NAME: &str = "sha256_compress_rn";
 
-pub(super) const BITS_PER_LIMB: usize = 16;
-pub(super) const LIMB_MASK: u32 = 0xffff;
+pub const BITS_PER_LIMB: usize = 16;
+pub const LIMB_MASK: u32 = 0xffff;
 
-pub(super) const SHA256_RN_K: [u32; SHA256_RN_COMPRESS_ROUNDS] = [
+pub const SHA256_RN_VIRTUAL_BIG_SIGMA1_I0_ARITY: usize = 5;
+pub const SHA256_RN_VIRTUAL_BIG_SIGMA1_I1_ARITY: usize = 5;
+pub const SHA256_RN_VIRTUAL_BIG_SIGMA1_O2_ARITY: usize = 4;
+pub const SHA256_RN_VIRTUAL_BIG_SIGMA0_I0_ARITY: usize = 6;
+pub const SHA256_RN_VIRTUAL_BIG_SIGMA0_I1_ARITY: usize = 6;
+pub const SHA256_RN_VIRTUAL_BIG_SIGMA0_O2_ARITY: usize = 4;
+pub const SHA256_RN_VIRTUAL_BIG_SIGMA1_I0_START: usize = 0;
+pub const SHA256_RN_VIRTUAL_BIG_SIGMA1_I1_START: usize =
+    SHA256_RN_VIRTUAL_BIG_SIGMA1_I0_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_BIG_SIGMA1_I0_ARITY;
+pub const SHA256_RN_VIRTUAL_BIG_SIGMA1_O2_START: usize =
+    SHA256_RN_VIRTUAL_BIG_SIGMA1_I1_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_BIG_SIGMA1_I1_ARITY;
+pub const SHA256_RN_VIRTUAL_BIG_SIGMA0_I0_START: usize =
+    SHA256_RN_VIRTUAL_BIG_SIGMA1_O2_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_BIG_SIGMA1_O2_ARITY;
+pub const SHA256_RN_VIRTUAL_BIG_SIGMA0_I1_START: usize =
+    SHA256_RN_VIRTUAL_BIG_SIGMA0_I0_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_BIG_SIGMA0_I0_ARITY;
+pub const SHA256_RN_VIRTUAL_BIG_SIGMA0_O2_START: usize =
+    SHA256_RN_VIRTUAL_BIG_SIGMA0_I1_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_BIG_SIGMA0_I1_ARITY;
+pub const NUM_SHA256_COMPRESS_RN_VIRTUAL_COLS: usize =
+    SHA256_RN_VIRTUAL_BIG_SIGMA0_O2_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_BIG_SIGMA0_O2_ARITY;
+
+pub const SHA256_RN_K: [u32; SHA256_RN_COMPRESS_ROUNDS] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98,
     0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786,
     0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8,
@@ -69,7 +89,7 @@ pub(super) mod Sigma1 {
 }
 
 #[allow(non_snake_case)]
-pub(super) mod BigSigma0 {
+pub mod BigSigma0 {
     pub const I0_L: u32 = 0b0000111110000011;
     pub const I0_H0: u32 = 0b01111100;
     pub const I0_H1: u32 = 0b11110000;
@@ -84,7 +104,9 @@ pub(super) mod BigSigma0 {
 }
 
 #[allow(non_snake_case)]
-pub(super) mod BigSigma1 {
+pub mod BigSigma1 {
+    pub const I0: u32 = 0b10011000110001100110011000110001;
+    pub const I1: u32 = 0b01100111001110011001100111001110;
     pub const I0_L: u32 = 0b0110011000110001;
     pub const I0_H: u32 = 0b1001100011000110;
     pub const I1_L: u32 = 0b1001100111001110;
@@ -186,6 +208,7 @@ pub struct Sha256CompressRnWitness {
     pub scheduling: [Sha256RnSchedulingRoundWitness; SHA256_RN_SCHEDULE_EXTENSIONS],
     pub compression: [Sha256RnCompressionRoundWitness; SHA256_RN_COMPRESS_ROUNDS],
     pub h_out: [u32; SHA256_RN_WORDS],
+    pub virtual_lookup_values: Vec<F>,
 }
 
 pub fn generate_sha256_compress_rn_witness(
@@ -362,6 +385,12 @@ pub fn generate_sha256_compress_rn_witness(
 
     let mut compression = [EMPTY_COMP; SHA256_RN_COMPRESS_ROUNDS];
     let mut hash_buffer = words_to_limbs(h_in);
+    let mut big_sigma0_i0 = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
+    let mut big_sigma0_i1 = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
+    let mut big_sigma0_o2 = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
+    let mut big_sigma1_i0 = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
+    let mut big_sigma1_i1 = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
+    let mut big_sigma1_o2 = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
 
     for round in 0..SHA256_RN_COMPRESS_ROUNDS {
         let a_low = hash_buffer[0];
@@ -402,6 +431,27 @@ pub fn generate_sha256_compress_rn_witness(
         let sigma_1_o2_high = sigma_1_o2 >> BITS_PER_LIMB;
         let sigma_1_low = sigma_1_o0_low + sigma_1_o1_low + sigma_1_o2_low;
         let sigma_1_high = sigma_1_o0_high + sigma_1_o1_high + sigma_1_o2_high;
+
+        big_sigma1_i0.push([
+            F::from_u32(e_i0_low),
+            F::from_u32(e_i0_high),
+            F::from_u32(sigma_1_o0_low),
+            F::from_u32(sigma_1_o0_high),
+            F::from_u32(sigma_1_o20_pext),
+        ]);
+        big_sigma1_i1.push([
+            F::from_u32(e_i1_low),
+            F::from_u32(e_i1_high),
+            F::from_u32(sigma_1_o1_low),
+            F::from_u32(sigma_1_o1_high),
+            F::from_u32(sigma_1_o21_pext),
+        ]);
+        big_sigma1_o2.push([
+            F::from_u32(sigma_1_o20_pext),
+            F::from_u32(sigma_1_o21_pext),
+            F::from_u32(sigma_1_o2_low),
+            F::from_u32(sigma_1_o2_high),
+        ]);
 
         let f_i0_low = f_low & BigSigma1::I0_L;
         let f_i0_high = f_high & BigSigma1::I0_H;
@@ -446,6 +496,29 @@ pub fn generate_sha256_compress_rn_witness(
         let sigma_0_o2_high = sigma_0_o2 >> BITS_PER_LIMB;
         let sigma_0_low = sigma_0_o0_low + sigma_0_o1_low + sigma_0_o2_low;
         let sigma_0_high = sigma_0_o0_high + sigma_0_o1_high + sigma_0_o2_high;
+
+        big_sigma0_i0.push([
+            F::from_u32(a_i0_low),
+            F::from_u32(a_i0_high_0),
+            F::from_u32(a_i0_high_1),
+            F::from_u32(sigma_0_o0_low),
+            F::from_u32(sigma_0_o0_high),
+            F::from_u32(sigma_0_o20_pext),
+        ]);
+        big_sigma0_i1.push([
+            F::from_u32(a_i1_low_0),
+            F::from_u32(a_i1_low_1),
+            F::from_u32(a_i1_high),
+            F::from_u32(sigma_0_o1_low),
+            F::from_u32(sigma_0_o1_high),
+            F::from_u32(sigma_0_o21_pext),
+        ]);
+        big_sigma0_o2.push([
+            F::from_u32(sigma_0_o20_pext),
+            F::from_u32(sigma_0_o21_pext),
+            F::from_u32(sigma_0_o2_low),
+            F::from_u32(sigma_0_o2_high),
+        ]);
 
         let b_i0_low = b_low & BigSigma0::I0_L;
         let b_i0_high_0 = b_high & BigSigma0::I0_H0;
@@ -548,6 +621,26 @@ pub fn generate_sha256_compress_rn_witness(
 
     let final_state = limbs_to_words(hash_buffer);
     let h_out = core::array::from_fn(|i| h_in[i].wrapping_add(final_state[i]));
+    let mut virtual_lookup_values = Vec::with_capacity(NUM_SHA256_COMPRESS_RN_VIRTUAL_COLS);
+    for tuple in &big_sigma1_i0 {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &big_sigma1_i1 {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &big_sigma1_o2 {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &big_sigma0_i0 {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &big_sigma0_i1 {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &big_sigma0_o2 {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    debug_assert_eq!(virtual_lookup_values.len(), NUM_SHA256_COMPRESS_RN_VIRTUAL_COLS);
 
     Sha256CompressRnWitness {
         h_in,
@@ -556,14 +649,8 @@ pub fn generate_sha256_compress_rn_witness(
         scheduling,
         compression,
         h_out,
+        virtual_lookup_values,
     }
-}
-
-pub fn sha256_compress_rn_words(
-    h_in: [u32; SHA256_RN_WORDS],
-    block: [u32; SHA256_RN_BLOCK_WORDS],
-) -> [u32; SHA256_RN_WORDS] {
-    generate_sha256_compress_rn_witness(h_in, block).h_out
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -621,6 +708,14 @@ impl<const BUS: bool> crate::TableT for Sha256CompressRnPrecompile<BUS> {
         )
     }
 
+    fn virtual_padding_row(&self, _padding: &crate::PaddingMemory) -> Vec<F> {
+        generate_sha256_compress_rn_witness(crate::SHA256_IV, crate::SHA256_ZERO_BLOCK).virtual_lookup_values
+    }
+
+    fn n_virtual_columns(&self) -> usize {
+        NUM_SHA256_COMPRESS_RN_VIRTUAL_COLS
+    }
+
     fn execute<M: crate::MemoryAccess>(
         &self,
         arg_a: F,
@@ -645,6 +740,10 @@ impl<const BUS: bool> crate::TableT for Sha256CompressRnPrecompile<BUS> {
 
         let trace = ctx.traces.get_mut(&self.table()).unwrap();
         push_sha256_compress_rn_trace_row_from_witness(trace, F::ONE, arg_a, arg_b, arg_c, &witness);
+        debug_assert_eq!(trace.virtual_columns.len(), NUM_SHA256_COMPRESS_RN_VIRTUAL_COLS);
+        for (column, value) in trace.virtual_columns.iter_mut().zip(witness.virtual_lookup_values) {
+            column.push(value);
+        }
 
         Ok(())
     }
@@ -711,12 +810,12 @@ const fn small_sigma1(x: u32) -> u32 {
 }
 
 #[inline]
-const fn big_sigma0(x: u32) -> u32 {
+pub const fn big_sigma0(x: u32) -> u32 {
     x.rotate_right(2) ^ x.rotate_right(13) ^ x.rotate_right(22)
 }
 
 #[inline]
-const fn big_sigma1(x: u32) -> u32 {
+pub const fn big_sigma1(x: u32) -> u32 {
     x.rotate_right(6) ^ x.rotate_right(11) ^ x.rotate_right(25)
 }
 
@@ -726,7 +825,7 @@ const fn maj(a: u32, b: u32, c: u32) -> u32 {
 }
 
 #[inline]
-const fn pext_u32(x: u32, mut mask: u32) -> u32 {
+pub const fn pext_u32(x: u32, mut mask: u32) -> u32 {
     let mut out = 0u32;
     let mut bit = 1u32;
     while mask != 0 {
@@ -942,5 +1041,7 @@ mod tests {
         assert_eq!(trace.columns[SHA256_RN_COL_STATE_PTR], [F::from_usize(state_ptr)]);
         assert_eq!(trace.columns[SHA256_RN_COL_BLOCK_PTR], [F::from_usize(block_ptr)]);
         assert_eq!(trace.columns[SHA256_RN_COL_OUT_PTR], [F::from_usize(out_ptr)]);
+        assert_eq!(trace.virtual_columns.len(), NUM_SHA256_COMPRESS_RN_VIRTUAL_COLS);
+        assert!(trace.virtual_columns.iter().all(|column| column.len() == 1));
     }
 }

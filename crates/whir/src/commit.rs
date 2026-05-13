@@ -61,17 +61,7 @@ where
     PF<EF>: TwoAdicField,
 {
     #[instrument(skip_all)]
-    pub fn commit(
-        &self,
-        prover_state: &mut impl FSProver<EF>,
-        polynomial: &MleOwned<EF>,
-        actual_data_len: usize, // polynomial[actual_data_len..] is zero
-    ) -> Witness<EF> {
-        self.commit_with_root(prover_state, polynomial, actual_data_len).0
-    }
-
-    #[instrument(skip_all)]
-    pub fn commit_with_root(
+    pub fn commit_with_ood(
         &self,
         prover_state: &mut impl FSProver<EF>,
         polynomial: &MleOwned<EF>,

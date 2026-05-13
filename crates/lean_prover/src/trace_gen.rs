@@ -121,7 +121,12 @@ pub fn get_execution_trace(bytecode: &Bytecode, execution_result: ExecutionResul
     let padded_memory_len = (memory_padded.len().max(n_cycles).max(1 << MIN_LOG_N_ROWS_PER_TABLE)).next_power_of_two();
     memory_padded.resize(padded_memory_len, F::ZERO);
 
-    let ExecutionResult { mut traces, .. } = execution_result;
+    let ExecutionResult {
+        mut traces,
+        public_memory_size,
+        metadata,
+        ..
+    } = execution_result;
 
     let poseidon_trace = traces.get_mut(&Table::poseidon16()).unwrap();
     fill_trace_poseidon_16(&mut poseidon_trace.columns);
@@ -133,6 +138,7 @@ pub fn get_execution_trace(bytecode: &Bytecode, execution_result: ExecutionResul
         Table::execution(),
         TableTrace {
             columns: Vec::from(main_trace),
+            virtual_columns: Vec::new(),
             non_padded_n_rows: n_cycles,
             log_n_rows: log2_ceil_usize(n_cycles),
         },
@@ -140,12 +146,11 @@ pub fn get_execution_trace(bytecode: &Bytecode, execution_result: ExecutionResul
     for table in traces.keys().copied().collect::<Vec<_>>() {
         pad_table(&table, &mut traces, &padding_memory);
     }
-
     ExecutionTrace {
         traces,
-        public_memory_size: execution_result.public_memory_size,
+        public_memory_size,
         memory: memory_padded,
-        metadata: execution_result.metadata,
+        metadata,
     }
 }
 
@@ -165,5 +170,10 @@ fn pad_table(table: &Table, traces: &mut BTreeMap<Table, TableTrace>, padding_me
     trace.columns.par_iter_mut().enumerate().for_each(|(i, col)| {
         assert!(col.len() <= h); // potentially some columns have not been filled (in Poseidon -> we fill it later with SIMD + parallelism), but the first one should always be representative
         col.resize(n_rows, padding_row[i]);
+    });
+    let virtual_padding_row = table.virtual_padding_row(padding_memory);
+    trace.virtual_columns.par_iter_mut().enumerate().for_each(|(i, col)| {
+        assert_eq!(col.len(), h, "virtual column {}, table {}", i, table.name());
+        col.resize(n_rows, virtual_padding_row[i]);
     });
 }
