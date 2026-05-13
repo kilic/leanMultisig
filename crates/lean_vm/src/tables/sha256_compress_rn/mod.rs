@@ -43,6 +43,20 @@ pub const SHA256_RN_VIRTUAL_MAJ_I0_HIGH_1_ARITY: usize = 4;
 pub const SHA256_RN_VIRTUAL_MAJ_I1_LOW_0_ARITY: usize = 4;
 pub const SHA256_RN_VIRTUAL_MAJ_I1_LOW_1_ARITY: usize = 4;
 pub const SHA256_RN_VIRTUAL_MAJ_I1_HIGH_ARITY: usize = 4;
+pub const SHA256_RN_VIRTUAL_CH_LEFT_I0_LOW_ARITY: usize = 3;
+pub const SHA256_RN_VIRTUAL_CH_LEFT_I0_HIGH_ARITY: usize = 3;
+pub const SHA256_RN_VIRTUAL_CH_LEFT_I1_LOW_ARITY: usize = 3;
+pub const SHA256_RN_VIRTUAL_CH_LEFT_I1_HIGH_ARITY: usize = 3;
+pub const SHA256_RN_VIRTUAL_CH_RIGHT_I0_LOW_ARITY: usize = 3;
+pub const SHA256_RN_VIRTUAL_CH_RIGHT_I0_HIGH_ARITY: usize = 3;
+pub const SHA256_RN_VIRTUAL_CH_RIGHT_I1_LOW_ARITY: usize = 3;
+pub const SHA256_RN_VIRTUAL_CH_RIGHT_I1_HIGH_ARITY: usize = 3;
+pub const SHA256_RN_VIRTUAL_SMALL_SIGMA0_I0_ARITY: usize = 5;
+pub const SHA256_RN_VIRTUAL_SMALL_SIGMA0_I1_ARITY: usize = 5;
+pub const SHA256_RN_VIRTUAL_SMALL_SIGMA0_O2_ARITY: usize = 4;
+pub const SHA256_RN_VIRTUAL_SMALL_SIGMA1_I0_ARITY: usize = 5;
+pub const SHA256_RN_VIRTUAL_SMALL_SIGMA1_I1_ARITY: usize = 5;
+pub const SHA256_RN_VIRTUAL_SMALL_SIGMA1_O2_ARITY: usize = 4;
 pub const SHA256_RN_VIRTUAL_BIG_SIGMA1_I0_START: usize = 0;
 pub const SHA256_RN_VIRTUAL_BIG_SIGMA1_I1_START: usize =
     SHA256_RN_VIRTUAL_BIG_SIGMA1_I0_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_BIG_SIGMA1_I0_ARITY;
@@ -66,8 +80,36 @@ pub const SHA256_RN_VIRTUAL_MAJ_I1_LOW_1_START: usize =
     SHA256_RN_VIRTUAL_MAJ_I1_LOW_0_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_MAJ_I1_LOW_0_ARITY;
 pub const SHA256_RN_VIRTUAL_MAJ_I1_HIGH_START: usize =
     SHA256_RN_VIRTUAL_MAJ_I1_LOW_1_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_MAJ_I1_LOW_1_ARITY;
-pub const NUM_SHA256_COMPRESS_RN_VIRTUAL_COLS: usize =
+pub const SHA256_RN_VIRTUAL_CH_LEFT_I0_LOW_START: usize =
     SHA256_RN_VIRTUAL_MAJ_I1_HIGH_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_MAJ_I1_HIGH_ARITY;
+pub const SHA256_RN_VIRTUAL_CH_LEFT_I0_HIGH_START: usize =
+    SHA256_RN_VIRTUAL_CH_LEFT_I0_LOW_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_CH_LEFT_I0_LOW_ARITY;
+pub const SHA256_RN_VIRTUAL_CH_LEFT_I1_LOW_START: usize =
+    SHA256_RN_VIRTUAL_CH_LEFT_I0_HIGH_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_CH_LEFT_I0_HIGH_ARITY;
+pub const SHA256_RN_VIRTUAL_CH_LEFT_I1_HIGH_START: usize =
+    SHA256_RN_VIRTUAL_CH_LEFT_I1_LOW_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_CH_LEFT_I1_LOW_ARITY;
+pub const SHA256_RN_VIRTUAL_CH_RIGHT_I0_LOW_START: usize =
+    SHA256_RN_VIRTUAL_CH_LEFT_I1_HIGH_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_CH_LEFT_I1_HIGH_ARITY;
+pub const SHA256_RN_VIRTUAL_CH_RIGHT_I0_HIGH_START: usize =
+    SHA256_RN_VIRTUAL_CH_RIGHT_I0_LOW_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_CH_RIGHT_I0_LOW_ARITY;
+pub const SHA256_RN_VIRTUAL_CH_RIGHT_I1_LOW_START: usize =
+    SHA256_RN_VIRTUAL_CH_RIGHT_I0_HIGH_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_CH_RIGHT_I0_HIGH_ARITY;
+pub const SHA256_RN_VIRTUAL_CH_RIGHT_I1_HIGH_START: usize =
+    SHA256_RN_VIRTUAL_CH_RIGHT_I1_LOW_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_CH_RIGHT_I1_LOW_ARITY;
+pub const SHA256_RN_VIRTUAL_SMALL_SIGMA0_I0_START: usize =
+    SHA256_RN_VIRTUAL_CH_RIGHT_I1_HIGH_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_CH_RIGHT_I1_HIGH_ARITY;
+pub const SHA256_RN_VIRTUAL_SMALL_SIGMA0_I1_START: usize =
+    SHA256_RN_VIRTUAL_SMALL_SIGMA0_I0_START + SHA256_RN_SCHEDULE_EXTENSIONS * SHA256_RN_VIRTUAL_SMALL_SIGMA0_I0_ARITY;
+pub const SHA256_RN_VIRTUAL_SMALL_SIGMA0_O2_START: usize =
+    SHA256_RN_VIRTUAL_SMALL_SIGMA0_I1_START + SHA256_RN_SCHEDULE_EXTENSIONS * SHA256_RN_VIRTUAL_SMALL_SIGMA0_I1_ARITY;
+pub const SHA256_RN_VIRTUAL_SMALL_SIGMA1_I0_START: usize =
+    SHA256_RN_VIRTUAL_SMALL_SIGMA0_O2_START + SHA256_RN_SCHEDULE_EXTENSIONS * SHA256_RN_VIRTUAL_SMALL_SIGMA0_O2_ARITY;
+pub const SHA256_RN_VIRTUAL_SMALL_SIGMA1_I1_START: usize =
+    SHA256_RN_VIRTUAL_SMALL_SIGMA1_I0_START + SHA256_RN_SCHEDULE_EXTENSIONS * SHA256_RN_VIRTUAL_SMALL_SIGMA1_I0_ARITY;
+pub const SHA256_RN_VIRTUAL_SMALL_SIGMA1_O2_START: usize =
+    SHA256_RN_VIRTUAL_SMALL_SIGMA1_I1_START + SHA256_RN_SCHEDULE_EXTENSIONS * SHA256_RN_VIRTUAL_SMALL_SIGMA1_I1_ARITY;
+pub const NUM_SHA256_COMPRESS_RN_VIRTUAL_COLS: usize =
+    SHA256_RN_VIRTUAL_SMALL_SIGMA1_O2_START + SHA256_RN_SCHEDULE_EXTENSIONS * SHA256_RN_VIRTUAL_SMALL_SIGMA1_O2_ARITY;
 
 pub const SHA256_RN_K: [u32; SHA256_RN_COMPRESS_ROUNDS] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98,
@@ -81,7 +123,7 @@ pub const SHA256_RN_K: [u32; SHA256_RN_COMPRESS_ROUNDS] = [
 ];
 
 #[allow(non_snake_case)]
-pub(super) mod Sigma0 {
+pub mod Sigma0 {
     pub const I0_L: u32 = 0b1011010101010101;
     pub const I1_L: u32 = 0b0100101010101010;
     pub const I0_H: u32 = 0b0100101010101010;
@@ -94,7 +136,7 @@ pub(super) mod Sigma0 {
 }
 
 #[allow(non_snake_case)]
-pub(super) mod Sigma1 {
+pub mod Sigma1 {
     pub const I0_L: u32 = 0b1010100001010101;
     pub const I1_L: u32 = 0b0101011110101010;
     pub const I0_H: u32 = 0b1010101101010110;
@@ -315,6 +357,12 @@ pub fn generate_sha256_compress_rn_witness(
     let mut w = [0u32; SHA256_RN_COMPRESS_ROUNDS];
     w[..SHA256_RN_BLOCK_WORDS].copy_from_slice(&block);
     let mut scheduling = [EMPTY_SCHED; SHA256_RN_SCHEDULE_EXTENSIONS];
+    let mut small_sigma0_i0 = Vec::with_capacity(SHA256_RN_SCHEDULE_EXTENSIONS);
+    let mut small_sigma0_i1 = Vec::with_capacity(SHA256_RN_SCHEDULE_EXTENSIONS);
+    let mut small_sigma0_o2 = Vec::with_capacity(SHA256_RN_SCHEDULE_EXTENSIONS);
+    let mut small_sigma1_i0 = Vec::with_capacity(SHA256_RN_SCHEDULE_EXTENSIONS);
+    let mut small_sigma1_i1 = Vec::with_capacity(SHA256_RN_SCHEDULE_EXTENSIONS);
+    let mut small_sigma1_o2 = Vec::with_capacity(SHA256_RN_SCHEDULE_EXTENSIONS);
 
     for t in SHA256_RN_BLOCK_WORDS..SHA256_RN_COMPRESS_ROUNDS {
         let [w_16_low, w_16_high] = u32_to_u16_limbs_u32(w[t - 16]);
@@ -341,6 +389,26 @@ pub fn generate_sha256_compress_rn_witness(
         let sigma_0_o2 = sigma_0_o20 ^ sigma_0_o21;
         let sigma_0_o2_low = sigma_0_o2 & LIMB_MASK;
         let sigma_0_o2_high = sigma_0_o2 >> BITS_PER_LIMB;
+        small_sigma0_i0.push([
+            F::from_u32(w_15_i0_low),
+            F::from_u32(w_15_i0_high),
+            F::from_u32(sigma_0_o0_low),
+            F::from_u32(sigma_0_o0_high),
+            F::from_u32(sigma_0_o20_pext),
+        ]);
+        small_sigma0_i1.push([
+            F::from_u32(w_15_i1_low),
+            F::from_u32(w_15_i1_high),
+            F::from_u32(sigma_0_o1_low),
+            F::from_u32(sigma_0_o1_high),
+            F::from_u32(sigma_0_o21_pext),
+        ]);
+        small_sigma0_o2.push([
+            F::from_u32(sigma_0_o20_pext),
+            F::from_u32(sigma_0_o21_pext),
+            F::from_u32(sigma_0_o2_low),
+            F::from_u32(sigma_0_o2_high),
+        ]);
 
         let w_2_i0_low = w_2_low & Sigma1::I0_L;
         let w_2_i0_high = w_2_high & Sigma1::I0_H;
@@ -361,6 +429,26 @@ pub fn generate_sha256_compress_rn_witness(
         let sigma_1_o2 = sigma_1_o20 ^ sigma_1_o21;
         let sigma_1_o2_low = sigma_1_o2 & LIMB_MASK;
         let sigma_1_o2_high = sigma_1_o2 >> BITS_PER_LIMB;
+        small_sigma1_i0.push([
+            F::from_u32(w_2_i0_low),
+            F::from_u32(w_2_i0_high),
+            F::from_u32(sigma_1_o0_low),
+            F::from_u32(sigma_1_o0_high),
+            F::from_u32(sigma_1_o20_pext),
+        ]);
+        small_sigma1_i1.push([
+            F::from_u32(w_2_i1_low),
+            F::from_u32(w_2_i1_high),
+            F::from_u32(sigma_1_o1_low),
+            F::from_u32(sigma_1_o1_high),
+            F::from_u32(sigma_1_o21_pext),
+        ]);
+        small_sigma1_o2.push([
+            F::from_u32(sigma_1_o20_pext),
+            F::from_u32(sigma_1_o21_pext),
+            F::from_u32(sigma_1_o2_low),
+            F::from_u32(sigma_1_o2_high),
+        ]);
 
         let sigma_0_low = sigma_0_o0_low + sigma_0_o1_low + sigma_0_o2_low;
         let sigma_0_high = sigma_0_o0_high + sigma_0_o1_high + sigma_0_o2_high;
@@ -409,6 +497,14 @@ pub fn generate_sha256_compress_rn_witness(
     let mut big_sigma1_i0 = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
     let mut big_sigma1_i1 = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
     let mut big_sigma1_o2 = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
+    let mut ch_left_i0_low_tuples = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
+    let mut ch_left_i0_high_tuples = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
+    let mut ch_left_i1_low_tuples = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
+    let mut ch_left_i1_high_tuples = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
+    let mut ch_right_i0_low_tuples = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
+    let mut ch_right_i0_high_tuples = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
+    let mut ch_right_i1_low_tuples = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
+    let mut ch_right_i1_high_tuples = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
     let mut maj_i0_low_tuples = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
     let mut maj_i0_high_0_tuples = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
     let mut maj_i0_high_1_tuples = Vec::with_capacity(SHA256_RN_COMPRESS_ROUNDS);
@@ -494,6 +590,46 @@ pub fn generate_sha256_compress_rn_witness(
         let ch_right_i0_high = (!e_i0_high) & g_i0_high;
         let ch_right_i1_low = (!e_i1_low) & g_i1_low;
         let ch_right_i1_high = (!e_i1_high) & g_i1_high;
+        ch_left_i0_low_tuples.push([
+            F::from_u32(e_i0_low),
+            F::from_u32(f_i0_low),
+            F::from_u32(ch_left_i0_low),
+        ]);
+        ch_left_i0_high_tuples.push([
+            F::from_u32(e_i0_high),
+            F::from_u32(f_i0_high),
+            F::from_u32(ch_left_i0_high),
+        ]);
+        ch_left_i1_low_tuples.push([
+            F::from_u32(e_i1_low),
+            F::from_u32(f_i1_low),
+            F::from_u32(ch_left_i1_low),
+        ]);
+        ch_left_i1_high_tuples.push([
+            F::from_u32(e_i1_high),
+            F::from_u32(f_i1_high),
+            F::from_u32(ch_left_i1_high),
+        ]);
+        ch_right_i0_low_tuples.push([
+            F::from_u32(e_i0_low),
+            F::from_u32(g_i0_low),
+            F::from_u32(ch_right_i0_low),
+        ]);
+        ch_right_i0_high_tuples.push([
+            F::from_u32(e_i0_high),
+            F::from_u32(g_i0_high),
+            F::from_u32(ch_right_i0_high),
+        ]);
+        ch_right_i1_low_tuples.push([
+            F::from_u32(e_i1_low),
+            F::from_u32(g_i1_low),
+            F::from_u32(ch_right_i1_low),
+        ]);
+        ch_right_i1_high_tuples.push([
+            F::from_u32(e_i1_high),
+            F::from_u32(g_i1_high),
+            F::from_u32(ch_right_i1_high),
+        ]);
         let ch_low = ch_left_i0_low + ch_left_i1_low + ch_right_i0_low + ch_right_i1_low;
         let ch_high = ch_left_i0_high + ch_left_i1_high + ch_right_i0_high + ch_right_i1_high;
 
@@ -718,6 +854,48 @@ pub fn generate_sha256_compress_rn_witness(
     for tuple in &maj_i1_high_tuples {
         virtual_lookup_values.extend_from_slice(tuple);
     }
+    for tuple in &ch_left_i0_low_tuples {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &ch_left_i0_high_tuples {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &ch_left_i1_low_tuples {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &ch_left_i1_high_tuples {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &ch_right_i0_low_tuples {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &ch_right_i0_high_tuples {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &ch_right_i1_low_tuples {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &ch_right_i1_high_tuples {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &small_sigma0_i0 {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &small_sigma0_i1 {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &small_sigma0_o2 {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &small_sigma1_i0 {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &small_sigma1_i1 {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
+    for tuple in &small_sigma1_o2 {
+        virtual_lookup_values.extend_from_slice(tuple);
+    }
     debug_assert_eq!(virtual_lookup_values.len(), NUM_SHA256_COMPRESS_RN_VIRTUAL_COLS);
 
     Sha256CompressRnWitness {
@@ -878,12 +1056,12 @@ fn limbs_to_words(limbs: [u32; SHA256_RN_STATE_LIMBS]) -> [u32; SHA256_RN_WORDS]
 }
 
 #[inline]
-const fn small_sigma0(x: u32) -> u32 {
+pub const fn small_sigma0(x: u32) -> u32 {
     x.rotate_right(7) ^ x.rotate_right(18) ^ (x >> 3)
 }
 
 #[inline]
-const fn small_sigma1(x: u32) -> u32 {
+pub const fn small_sigma1(x: u32) -> u32 {
     x.rotate_right(17) ^ x.rotate_right(19) ^ (x >> 10)
 }
 
