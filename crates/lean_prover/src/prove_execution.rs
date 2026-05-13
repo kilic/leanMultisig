@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use crate::sha256_rn_fixed_lookups::{
-    Sha256RnFixedLookupProverSetup, build_sha256_rn_fixed_lookup_multiplicity_traces, prove_sha256_rn_fixed_lookup,
+    Sha256RnFixedLookupProverParams, build_sha256_rn_fixed_lookup_multiplicity_traces, prove_sha256_rn_fixed_lookup,
+    sha256_rn_fixed_lookup_transcript_scalars,
 };
 use crate::*;
 use lean_vm::*;
@@ -33,7 +34,7 @@ pub fn prove_execution_with_sha256_rn_fixed_lookups(
     witness: &ExecutionWitness,
     whir_config: &WhirConfigBuilder,
     vm_profiler: bool,
-    fixed_lookups: &Sha256RnFixedLookupProverSetup,
+    fixed_lookups: &Sha256RnFixedLookupProverParams,
 ) -> ExecutionProof {
     prove_execution_inner(
         bytecode,
@@ -51,7 +52,7 @@ fn prove_execution_inner(
     witness: &ExecutionWitness,
     whir_config: &WhirConfigBuilder,
     vm_profiler: bool,
-    sha256_rn_fixed_lookups: Option<&Sha256RnFixedLookupProverSetup>,
+    sha256_rn_fixed_lookups: Option<&Sha256RnFixedLookupProverParams>,
 ) -> ExecutionProof {
     check_rate(whir_config.starting_log_inv_rate)
         .map_err(|err| panic!("{err}"))
@@ -78,7 +79,9 @@ fn prove_execution_inner(
     prover_state.observe_scalars(public_input);
     prover_state.observe_scalars(&poseidon16_compress_pair(&bytecode.hash, &SNARK_DOMAIN_SEP));
     if let Some(fixed_lookups) = sha256_rn_fixed_lookups {
-        prover_state.observe_scalars(&fixed_lookups.verifier_setup().transcript_scalars());
+        prover_state.observe_scalars(&sha256_rn_fixed_lookup_transcript_scalars(
+            fixed_lookups.transcript_version,
+        ));
     }
     prover_state.add_base_scalars(
         &[
@@ -254,12 +257,11 @@ fn prove_execution_inner(
         committed_statements.get_mut(table).unwrap().push(claim);
     }
 
-    if let Some(fixed_lookups) = sha256_rn_fixed_lookups {
+    if sha256_rn_fixed_lookups.is_some() {
         let fixed_lookup_statements = prove_sha256_rn_fixed_lookup(
             &mut prover_state,
             &traces[&Table::sha256_compress_rn()],
             &multiplicity_traces,
-            fixed_lookups,
         );
         committed_statements
             .get_mut(&Table::sha256_compress_rn())

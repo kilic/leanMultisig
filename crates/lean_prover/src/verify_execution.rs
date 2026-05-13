@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use crate::sha256_rn_fixed_lookups::{
-    Sha256RnFixedLookupVerifierSetup, sha256_rn_fixed_lookup_multiplicity_trace_layouts, verify_sha256_rn_fixed_lookup,
+    sha256_rn_fixed_lookup_multiplicity_trace_layouts, sha256_rn_fixed_lookup_transcript_scalars,
+    verify_sha256_rn_fixed_lookup,
 };
 use crate::*;
 use backend::{Proof, RawProof, VerifierState};
@@ -26,22 +27,22 @@ pub fn verify_execution_with_sha256_rn_fixed_lookups(
     bytecode: &Bytecode,
     public_input: &[F],
     proof: Proof<F>,
-    fixed_lookups: &Sha256RnFixedLookupVerifierSetup,
+    fixed_lookup_transcript_version: usize,
 ) -> Result<(ProofVerificationDetails, RawProof<F>), ProofError> {
-    verify_execution_inner(bytecode, public_input, proof, Some(fixed_lookups))
+    verify_execution_inner(bytecode, public_input, proof, Some(fixed_lookup_transcript_version))
 }
 
 fn verify_execution_inner(
     bytecode: &Bytecode,
     public_input: &[F],
     proof: Proof<F>,
-    sha256_rn_fixed_lookups: Option<&Sha256RnFixedLookupVerifierSetup>,
+    sha256_rn_fixed_lookup_transcript_version: Option<usize>,
 ) -> Result<(ProofVerificationDetails, RawProof<F>), ProofError> {
     let mut verifier_state = VerifierState::<EF, _>::new(proof, get_poseidon16().clone())?;
     verifier_state.observe_scalars(public_input);
     verifier_state.observe_scalars(&poseidon16_compress_pair(&bytecode.hash, &SNARK_DOMAIN_SEP));
-    if let Some(fixed_lookups) = sha256_rn_fixed_lookups {
-        verifier_state.observe_scalars(&fixed_lookups.transcript_scalars());
+    if let Some(transcript_version) = sha256_rn_fixed_lookup_transcript_version {
+        verifier_state.observe_scalars(&sha256_rn_fixed_lookup_transcript_scalars(transcript_version));
     }
     let dims = verifier_state
         .next_base_scalars_vec(3 + N_TABLES)?
@@ -86,7 +87,7 @@ fn verify_execution_inner(
         return Err(ProofError::InvalidProof);
     }
 
-    let aux_layouts = sha256_rn_fixed_lookups
+    let aux_layouts = sha256_rn_fixed_lookup_transcript_version
         .map(|_| sha256_rn_fixed_lookup_multiplicity_trace_layouts())
         .unwrap_or_default();
 
@@ -200,7 +201,7 @@ fn verify_execution_inner(
         return Err(ProofError::InvalidProof);
     }
 
-    if sha256_rn_fixed_lookups.is_some() {
+    if sha256_rn_fixed_lookup_transcript_version.is_some() {
         let fixed_lookup_statements =
             verify_sha256_rn_fixed_lookup(&mut verifier_state, table_n_vars[&Table::sha256_compress_rn()])?;
         committed_statements

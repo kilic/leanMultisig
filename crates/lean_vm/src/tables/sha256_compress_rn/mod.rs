@@ -57,6 +57,12 @@ pub const SHA256_RN_VIRTUAL_SMALL_SIGMA0_O2_ARITY: usize = 4;
 pub const SHA256_RN_VIRTUAL_SMALL_SIGMA1_I0_ARITY: usize = 5;
 pub const SHA256_RN_VIRTUAL_SMALL_SIGMA1_I1_ARITY: usize = 5;
 pub const SHA256_RN_VIRTUAL_SMALL_SIGMA1_O2_ARITY: usize = 4;
+pub const SHA256_RN_VIRTUAL_RANGE16_ARITY: usize = 1;
+pub const SHA256_RN_RANGE16_SCHEDULING_REQUESTS: usize = SHA256_RN_SCHEDULE_EXTENSIONS * 4;
+pub const SHA256_RN_RANGE16_COMPRESSION_REQUESTS: usize = SHA256_RN_COMPRESS_ROUNDS * 8;
+pub const SHA256_RN_RANGE16_OUTPUT_REQUESTS: usize = SHA256_RN_STATE_LIMBS;
+pub const SHA256_RN_RANGE16_REQUESTS_PER_ROW: usize =
+    SHA256_RN_RANGE16_SCHEDULING_REQUESTS + SHA256_RN_RANGE16_COMPRESSION_REQUESTS + SHA256_RN_RANGE16_OUTPUT_REQUESTS;
 pub const SHA256_RN_VIRTUAL_BIG_SIGMA1_I0_START: usize = 0;
 pub const SHA256_RN_VIRTUAL_BIG_SIGMA1_I1_START: usize =
     SHA256_RN_VIRTUAL_BIG_SIGMA1_I0_START + SHA256_RN_COMPRESS_ROUNDS * SHA256_RN_VIRTUAL_BIG_SIGMA1_I0_ARITY;
@@ -108,8 +114,10 @@ pub const SHA256_RN_VIRTUAL_SMALL_SIGMA1_I1_START: usize =
     SHA256_RN_VIRTUAL_SMALL_SIGMA1_I0_START + SHA256_RN_SCHEDULE_EXTENSIONS * SHA256_RN_VIRTUAL_SMALL_SIGMA1_I0_ARITY;
 pub const SHA256_RN_VIRTUAL_SMALL_SIGMA1_O2_START: usize =
     SHA256_RN_VIRTUAL_SMALL_SIGMA1_I1_START + SHA256_RN_SCHEDULE_EXTENSIONS * SHA256_RN_VIRTUAL_SMALL_SIGMA1_I1_ARITY;
-pub const NUM_SHA256_COMPRESS_RN_VIRTUAL_COLS: usize =
+pub const SHA256_RN_VIRTUAL_RANGE16_START: usize =
     SHA256_RN_VIRTUAL_SMALL_SIGMA1_O2_START + SHA256_RN_SCHEDULE_EXTENSIONS * SHA256_RN_VIRTUAL_SMALL_SIGMA1_O2_ARITY;
+pub const NUM_SHA256_COMPRESS_RN_VIRTUAL_COLS: usize =
+    SHA256_RN_VIRTUAL_RANGE16_START + SHA256_RN_RANGE16_REQUESTS_PER_ROW * SHA256_RN_VIRTUAL_RANGE16_ARITY;
 
 pub const SHA256_RN_K: [u32; SHA256_RN_COMPRESS_ROUNDS] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98,
@@ -363,6 +371,7 @@ pub fn generate_sha256_compress_rn_witness(
     let mut small_sigma1_i0 = Vec::with_capacity(SHA256_RN_SCHEDULE_EXTENSIONS);
     let mut small_sigma1_i1 = Vec::with_capacity(SHA256_RN_SCHEDULE_EXTENSIONS);
     let mut small_sigma1_o2 = Vec::with_capacity(SHA256_RN_SCHEDULE_EXTENSIONS);
+    let mut range16_values = Vec::with_capacity(SHA256_RN_RANGE16_REQUESTS_PER_ROW);
 
     for t in SHA256_RN_BLOCK_WORDS..SHA256_RN_COMPRESS_ROUNDS {
         let [w_16_low, w_16_high] = u32_to_u16_limbs_u32(w[t - 16]);
@@ -462,6 +471,10 @@ pub fn generate_sha256_compress_rn_witness(
         let new_w_low = round_low - (carry_low << BITS_PER_LIMB);
         let new_w_high = round_high + carry_low - (carry_high << BITS_PER_LIMB);
         w[t] = u16_limb_u32s_to_u32([new_w_low, new_w_high]);
+        for value in [new_w_low, new_w_high, carry_low, carry_high] {
+            debug_assert!(value <= LIMB_MASK);
+            range16_values.push(F::from_u32(value));
+        }
 
         scheduling[t - SHA256_RN_BLOCK_WORDS] = Sha256RnSchedulingRoundWitness {
             w_15_i0_low,
@@ -753,6 +766,19 @@ pub fn generate_sha256_compress_rn_witness(
         let a_carry_high = (temp1_high + temp2_high + a_carry_low) >> BITS_PER_LIMB;
         let new_a_low = temp1_low + temp2_low - (a_carry_low << BITS_PER_LIMB);
         let new_a_high = temp1_high + temp2_high + a_carry_low - (a_carry_high << BITS_PER_LIMB);
+        for value in [
+            new_e_low,
+            new_e_high,
+            new_a_low,
+            new_a_high,
+            e_carry_low,
+            e_carry_high,
+            a_carry_low,
+            a_carry_high,
+        ] {
+            debug_assert!(value <= LIMB_MASK);
+            range16_values.push(F::from_u32(value));
+        }
 
         compression[round] = Sha256RnCompressionRoundWitness {
             e_i0_low,
@@ -817,6 +843,12 @@ pub fn generate_sha256_compress_rn_witness(
 
     let final_state = limbs_to_words(hash_buffer);
     let h_out = core::array::from_fn(|i| h_in[i].wrapping_add(final_state[i]));
+    for word in h_out {
+        for limb in u32_to_u16_limbs_u32(word) {
+            range16_values.push(F::from_u32(limb));
+        }
+    }
+    debug_assert_eq!(range16_values.len(), SHA256_RN_RANGE16_REQUESTS_PER_ROW);
     let mut virtual_lookup_values = Vec::with_capacity(NUM_SHA256_COMPRESS_RN_VIRTUAL_COLS);
     for tuple in &big_sigma1_i0 {
         virtual_lookup_values.extend_from_slice(tuple);
@@ -896,6 +928,7 @@ pub fn generate_sha256_compress_rn_witness(
     for tuple in &small_sigma1_o2 {
         virtual_lookup_values.extend_from_slice(tuple);
     }
+    virtual_lookup_values.extend_from_slice(&range16_values);
     debug_assert_eq!(virtual_lookup_values.len(), NUM_SHA256_COMPRESS_RN_VIRTUAL_COLS);
 
     Sha256CompressRnWitness {

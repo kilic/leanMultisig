@@ -1,7 +1,7 @@
 use crate::{
     default_whir_config,
     prove_execution::{prove_execution, prove_execution_with_sha256_rn_fixed_lookups},
-    sha256_rn_fixed_lookups::{Sha256RnRelation, setup_sha256_rn_fixed_lookups},
+    sha256_rn_fixed_lookups::sha256_rn_fixed_lookup_params,
     verify_execution::{verify_execution, verify_execution_with_sha256_rn_fixed_lookups},
 };
 use backend::*;
@@ -130,7 +130,7 @@ def main():
 }
 
 #[test]
-fn test_sha256_rn_fixed_lookup_setup_binds_transcript() {
+fn test_sha256_rn_fixed_lookup_params_bind_transcript() {
     utils::init_tracing();
     const SHA_FIXTURE_STRIDE: usize = SHA256_STATE_LIMBS + SHA256_BLOCK_LIMBS + SHA256_STATE_LIMBS;
     let program_str = r#"
@@ -155,26 +155,27 @@ def main():
     let bytecode = compile_program(&ProgramSource::Raw(program_str.to_string()));
     let witness = ExecutionWitness::default();
     let whir_config = default_whir_config(1);
-    let setup = setup_sha256_rn_fixed_lookups(&whir_config);
+    let params = sha256_rn_fixed_lookup_params();
     let proof =
-        prove_execution_with_sha256_rn_fixed_lookups(&bytecode, &public_input, &witness, &whir_config, false, &setup);
+        prove_execution_with_sha256_rn_fixed_lookups(&bytecode, &public_input, &witness, &whir_config, false, &params);
 
     verify_execution_with_sha256_rn_fixed_lookups(
         &bytecode,
         &public_input,
         proof.proof.clone(),
-        setup.verifier_setup(),
+        params.verifier_transcript_version(),
     )
     .unwrap();
 
-    let mut tampered_setup = setup.verifier_setup().clone();
-    tampered_setup
-        .fixed_tables
-        .get_mut(&Sha256RnRelation::BigSigma1I0)
-        .unwrap()
-        .log_n_rows += 1;
+    let tampered_transcript_version = params.verifier_transcript_version() + 1;
     assert!(
-        verify_execution_with_sha256_rn_fixed_lookups(&bytecode, &public_input, proof.proof, &tampered_setup).is_err()
+        verify_execution_with_sha256_rn_fixed_lookups(
+            &bytecode,
+            &public_input,
+            proof.proof,
+            tampered_transcript_version
+        )
+        .is_err()
     );
 }
 
