@@ -92,19 +92,13 @@ pub const SHA256_RN_SMALL_SIGMA1_I0_MULT_SECTION: &str = "sha256_rn_small_sigma1
 pub const SHA256_RN_SMALL_SIGMA1_I1_MULT_SECTION: &str = "sha256_rn_small_sigma1_i1_mult";
 pub const SHA256_RN_SMALL_SIGMA1_O2_MULT_SECTION: &str = "sha256_rn_small_sigma1_o2_mult";
 
-pub const SHA256_RN_MAJ_I0_LOW_LOG_N_ROWS: usize = 3 * BigSigma0::I0_L.count_ones() as usize;
-pub const SHA256_RN_MAJ_I0_HIGH_0_LOG_N_ROWS: usize = 3 * BigSigma0::I0_H0.count_ones() as usize;
-pub const SHA256_RN_MAJ_I0_HIGH_1_LOG_N_ROWS: usize = 3 * BigSigma0::I0_H1.count_ones() as usize;
-pub const SHA256_RN_MAJ_I1_LOW_0_LOG_N_ROWS: usize = 3 * BigSigma0::I1_L0.count_ones() as usize;
-pub const SHA256_RN_MAJ_I1_LOW_1_LOG_N_ROWS: usize = 3 * BigSigma0::I1_L1.count_ones() as usize;
-pub const SHA256_RN_MAJ_I1_HIGH_LOG_N_ROWS: usize = 3 * BigSigma0::I1_H.count_ones() as usize;
+pub const SHA256_RN_MAJ_I0_LOW_I1_HIGH_LOG_N_ROWS: usize = 3 * BigSigma0::I0_L.count_ones() as usize;
+pub const SHA256_RN_MAJ_I0_HIGH_0_I1_LOW_0_LOG_N_ROWS: usize = 3 * BigSigma0::I0_H0.count_ones() as usize;
+pub const SHA256_RN_MAJ_I0_HIGH_1_I1_LOW_1_LOG_N_ROWS: usize = 3 * BigSigma0::I0_H1.count_ones() as usize;
 pub const SHA256_RN_MAJ_N_COLUMNS: usize = 4;
-pub const SHA256_RN_MAJ_I0_LOW_MULT_SECTION: &str = "sha256_rn_maj_i0_low_mult";
-pub const SHA256_RN_MAJ_I0_HIGH_0_MULT_SECTION: &str = "sha256_rn_maj_i0_high_0_mult";
-pub const SHA256_RN_MAJ_I0_HIGH_1_MULT_SECTION: &str = "sha256_rn_maj_i0_high_1_mult";
-pub const SHA256_RN_MAJ_I1_LOW_0_MULT_SECTION: &str = "sha256_rn_maj_i1_low_0_mult";
-pub const SHA256_RN_MAJ_I1_LOW_1_MULT_SECTION: &str = "sha256_rn_maj_i1_low_1_mult";
-pub const SHA256_RN_MAJ_I1_HIGH_MULT_SECTION: &str = "sha256_rn_maj_i1_high_mult";
+pub const SHA256_RN_MAJ_I0_LOW_I1_HIGH_MULT_SECTION: &str = "sha256_rn_maj_i0_low_i1_high_mult";
+pub const SHA256_RN_MAJ_I0_HIGH_0_I1_LOW_0_MULT_SECTION: &str = "sha256_rn_maj_i0_high_0_i1_low_0_mult";
+pub const SHA256_RN_MAJ_I0_HIGH_1_I1_LOW_1_MULT_SECTION: &str = "sha256_rn_maj_i0_high_1_i1_low_1_mult";
 
 pub const SHA256_RN_CH_I0_LOW_LOG_N_ROWS: usize = 2 * BigSigma1::I0_L.count_ones() as usize;
 pub const SHA256_RN_CH_I0_HIGH_LOG_N_ROWS: usize = 2 * BigSigma1::I0_H.count_ones() as usize;
@@ -125,10 +119,10 @@ pub const SHA256_RN_RANGE16_N_COLUMNS: usize = 1;
 pub const SHA256_RN_RANGE16_MULT_SECTION: &str = "sha256_rn_range16_mult";
 
 pub const SHA256_RN_FIXED_LOOKUP_MAX_ARITY: usize = 6;
-pub const SHA256_RN_FIXED_LOOKUP_N_RELATIONS: usize = 27;
+pub const SHA256_RN_FIXED_LOOKUP_N_RELATIONS: usize = 24;
 
 const SHA256_RN_FIXED_LOOKUP_TRANSCRIPT_DOMAIN: usize = 0x5A_52_4E;
-const SHA256_RN_FIXED_LOOKUP_TRANSCRIPT_VERSION: usize = 9;
+const SHA256_RN_FIXED_LOOKUP_TRANSCRIPT_VERSION: usize = 10;
 const SHA256_RN_BIG_SIGMA0_I0_FIXED_LOOKUP_DOMAINSEP: usize = 0xB0_10;
 const SHA256_RN_BIG_SIGMA0_I1_FIXED_LOOKUP_DOMAINSEP: usize = 0xB0_11;
 const SHA256_RN_BIG_SIGMA0_O2_FIXED_LOOKUP_DOMAINSEP: usize = 0xB0_02;
@@ -141,12 +135,9 @@ const SHA256_RN_SMALL_SIGMA0_O2_FIXED_LOOKUP_DOMAINSEP: usize = 0x50_02;
 const SHA256_RN_SMALL_SIGMA1_I0_FIXED_LOOKUP_DOMAINSEP: usize = 0x51_10;
 const SHA256_RN_SMALL_SIGMA1_I1_FIXED_LOOKUP_DOMAINSEP: usize = 0x51_11;
 const SHA256_RN_SMALL_SIGMA1_O2_FIXED_LOOKUP_DOMAINSEP: usize = 0x51_02;
-const SHA256_RN_MAJ_I0_LOW_FIXED_LOOKUP_DOMAINSEP: usize = 0xBA_00;
-const SHA256_RN_MAJ_I0_HIGH_0_FIXED_LOOKUP_DOMAINSEP: usize = 0xBA_01;
-const SHA256_RN_MAJ_I0_HIGH_1_FIXED_LOOKUP_DOMAINSEP: usize = 0xBA_02;
-const SHA256_RN_MAJ_I1_LOW_0_FIXED_LOOKUP_DOMAINSEP: usize = 0xBA_10;
-const SHA256_RN_MAJ_I1_LOW_1_FIXED_LOOKUP_DOMAINSEP: usize = 0xBA_11;
-const SHA256_RN_MAJ_I1_HIGH_FIXED_LOOKUP_DOMAINSEP: usize = 0xBA_12;
+const SHA256_RN_MAJ_I0_LOW_I1_HIGH_FIXED_LOOKUP_DOMAINSEP: usize = 0xBA_00;
+const SHA256_RN_MAJ_I0_HIGH_0_I1_LOW_0_FIXED_LOOKUP_DOMAINSEP: usize = 0xBA_01;
+const SHA256_RN_MAJ_I0_HIGH_1_I1_LOW_1_FIXED_LOOKUP_DOMAINSEP: usize = 0xBA_02;
 const SHA256_RN_CH_LEFT_I0_LOW_FIXED_LOOKUP_DOMAINSEP: usize = 0xC1_00;
 const SHA256_RN_CH_LEFT_I0_HIGH_FIXED_LOOKUP_DOMAINSEP: usize = 0xC1_01;
 const SHA256_RN_CH_LEFT_I1_LOW_FIXED_LOOKUP_DOMAINSEP: usize = 0xC1_10;
@@ -225,12 +216,9 @@ impl MultiplicityTrace {
                 Sha256RnRelation::BigSigma0I0 => SHA256_RN_BIG_SIGMA0_I0_MULT_SECTION,
                 Sha256RnRelation::BigSigma0I1 => SHA256_RN_BIG_SIGMA0_I1_MULT_SECTION,
                 Sha256RnRelation::BigSigma0O2 => SHA256_RN_BIG_SIGMA0_O2_MULT_SECTION,
-                Sha256RnRelation::MajI0Low => SHA256_RN_MAJ_I0_LOW_MULT_SECTION,
-                Sha256RnRelation::MajI0High0 => SHA256_RN_MAJ_I0_HIGH_0_MULT_SECTION,
-                Sha256RnRelation::MajI0High1 => SHA256_RN_MAJ_I0_HIGH_1_MULT_SECTION,
-                Sha256RnRelation::MajI1Low0 => SHA256_RN_MAJ_I1_LOW_0_MULT_SECTION,
-                Sha256RnRelation::MajI1Low1 => SHA256_RN_MAJ_I1_LOW_1_MULT_SECTION,
-                Sha256RnRelation::MajI1High => SHA256_RN_MAJ_I1_HIGH_MULT_SECTION,
+                Sha256RnRelation::MajI0LowI1High => SHA256_RN_MAJ_I0_LOW_I1_HIGH_MULT_SECTION,
+                Sha256RnRelation::MajI0High0I1Low0 => SHA256_RN_MAJ_I0_HIGH_0_I1_LOW_0_MULT_SECTION,
+                Sha256RnRelation::MajI0High1I1Low1 => SHA256_RN_MAJ_I0_HIGH_1_I1_LOW_1_MULT_SECTION,
                 Sha256RnRelation::ChLeftI0Low => SHA256_RN_CH_LEFT_I0_LOW_MULT_SECTION,
                 Sha256RnRelation::ChLeftI0High => SHA256_RN_CH_LEFT_I0_HIGH_MULT_SECTION,
                 Sha256RnRelation::ChLeftI1Low => SHA256_RN_CH_LEFT_I1_LOW_MULT_SECTION,
@@ -428,12 +416,9 @@ pub enum Sha256RnRelation {
     BigSigma0I0,
     BigSigma0I1,
     BigSigma0O2,
-    MajI0Low,
-    MajI0High0,
-    MajI0High1,
-    MajI1Low0,
-    MajI1Low1,
-    MajI1High,
+    MajI0LowI1High,
+    MajI0High0I1Low0,
+    MajI0High1I1Low1,
     ChLeftI0Low,
     ChLeftI0High,
     ChLeftI1Low,
@@ -460,12 +445,9 @@ impl Sha256RnRelation {
             Self::BigSigma0I0 => SHA256_RN_BIG_SIGMA0_I0_LOG_N_ROWS,
             Self::BigSigma0I1 => SHA256_RN_BIG_SIGMA0_I1_LOG_N_ROWS,
             Self::BigSigma0O2 => SHA256_RN_BIG_SIGMA0_O2_LOG_N_ROWS,
-            Self::MajI0Low => SHA256_RN_MAJ_I0_LOW_LOG_N_ROWS,
-            Self::MajI0High0 => SHA256_RN_MAJ_I0_HIGH_0_LOG_N_ROWS,
-            Self::MajI0High1 => SHA256_RN_MAJ_I0_HIGH_1_LOG_N_ROWS,
-            Self::MajI1Low0 => SHA256_RN_MAJ_I1_LOW_0_LOG_N_ROWS,
-            Self::MajI1Low1 => SHA256_RN_MAJ_I1_LOW_1_LOG_N_ROWS,
-            Self::MajI1High => SHA256_RN_MAJ_I1_HIGH_LOG_N_ROWS,
+            Self::MajI0LowI1High => SHA256_RN_MAJ_I0_LOW_I1_HIGH_LOG_N_ROWS,
+            Self::MajI0High0I1Low0 => SHA256_RN_MAJ_I0_HIGH_0_I1_LOW_0_LOG_N_ROWS,
+            Self::MajI0High1I1Low1 => SHA256_RN_MAJ_I0_HIGH_1_I1_LOW_1_LOG_N_ROWS,
             Self::ChLeftI0Low | Self::ChRightI0Low => SHA256_RN_CH_I0_LOW_LOG_N_ROWS,
             Self::ChLeftI0High | Self::ChRightI0High => SHA256_RN_CH_I0_HIGH_LOG_N_ROWS,
             Self::ChLeftI1Low | Self::ChRightI1Low => SHA256_RN_CH_I1_LOW_LOG_N_ROWS,
@@ -488,12 +470,9 @@ impl Sha256RnRelation {
             Self::BigSigma0I0 => SHA256_RN_BIG_SIGMA0_I0_FIXED_LOOKUP_DOMAINSEP,
             Self::BigSigma0I1 => SHA256_RN_BIG_SIGMA0_I1_FIXED_LOOKUP_DOMAINSEP,
             Self::BigSigma0O2 => SHA256_RN_BIG_SIGMA0_O2_FIXED_LOOKUP_DOMAINSEP,
-            Self::MajI0Low => SHA256_RN_MAJ_I0_LOW_FIXED_LOOKUP_DOMAINSEP,
-            Self::MajI0High0 => SHA256_RN_MAJ_I0_HIGH_0_FIXED_LOOKUP_DOMAINSEP,
-            Self::MajI0High1 => SHA256_RN_MAJ_I0_HIGH_1_FIXED_LOOKUP_DOMAINSEP,
-            Self::MajI1Low0 => SHA256_RN_MAJ_I1_LOW_0_FIXED_LOOKUP_DOMAINSEP,
-            Self::MajI1Low1 => SHA256_RN_MAJ_I1_LOW_1_FIXED_LOOKUP_DOMAINSEP,
-            Self::MajI1High => SHA256_RN_MAJ_I1_HIGH_FIXED_LOOKUP_DOMAINSEP,
+            Self::MajI0LowI1High => SHA256_RN_MAJ_I0_LOW_I1_HIGH_FIXED_LOOKUP_DOMAINSEP,
+            Self::MajI0High0I1Low0 => SHA256_RN_MAJ_I0_HIGH_0_I1_LOW_0_FIXED_LOOKUP_DOMAINSEP,
+            Self::MajI0High1I1Low1 => SHA256_RN_MAJ_I0_HIGH_1_I1_LOW_1_FIXED_LOOKUP_DOMAINSEP,
             Self::ChLeftI0Low => SHA256_RN_CH_LEFT_I0_LOW_FIXED_LOOKUP_DOMAINSEP,
             Self::ChLeftI0High => SHA256_RN_CH_LEFT_I0_HIGH_FIXED_LOOKUP_DOMAINSEP,
             Self::ChLeftI1Low => SHA256_RN_CH_LEFT_I1_LOW_FIXED_LOOKUP_DOMAINSEP,
@@ -520,21 +499,18 @@ impl Sha256RnRelation {
             Self::BigSigma0I0 => 9,
             Self::BigSigma0I1 => 10,
             Self::BigSigma0O2 => 11,
-            Self::MajI0Low => 12,
-            Self::MajI0High0 => 13,
-            Self::MajI0High1 => 14,
-            Self::MajI1Low0 => 15,
-            Self::MajI1Low1 => 16,
-            Self::MajI1High => 17,
-            Self::ChLeftI0Low => 18,
-            Self::ChLeftI0High => 19,
-            Self::ChLeftI1Low => 20,
-            Self::ChLeftI1High => 21,
-            Self::ChRightI0Low => 22,
-            Self::ChRightI0High => 23,
-            Self::ChRightI1Low => 24,
-            Self::ChRightI1High => 25,
-            Self::Range16 => 26,
+            Self::MajI0LowI1High => 12,
+            Self::MajI0High0I1Low0 => 13,
+            Self::MajI0High1I1Low1 => 14,
+            Self::ChLeftI0Low => 15,
+            Self::ChLeftI0High => 16,
+            Self::ChLeftI1Low => 17,
+            Self::ChLeftI1High => 18,
+            Self::ChRightI0Low => 19,
+            Self::ChRightI0High => 20,
+            Self::ChRightI1Low => 21,
+            Self::ChRightI1High => 22,
+            Self::Range16 => 23,
         }
     }
 
@@ -548,12 +524,7 @@ impl Sha256RnRelation {
             Self::SmallSigma0O2 | Self::SmallSigma1O2 => SHA256_RN_SMALL_SIGMA_O2_N_COLUMNS,
             Self::BigSigma0I0 | Self::BigSigma0I1 => SHA256_RN_BIG_SIGMA0_IO_N_COLUMNS,
             Self::BigSigma0O2 => SHA256_RN_BIG_SIGMA0_O2_N_COLUMNS,
-            Self::MajI0Low
-            | Self::MajI0High0
-            | Self::MajI0High1
-            | Self::MajI1Low0
-            | Self::MajI1Low1
-            | Self::MajI1High => SHA256_RN_MAJ_N_COLUMNS,
+            Self::MajI0LowI1High | Self::MajI0High0I1Low0 | Self::MajI0High1I1Low1 => SHA256_RN_MAJ_N_COLUMNS,
             Self::ChLeftI0Low
             | Self::ChLeftI0High
             | Self::ChLeftI1Low
@@ -580,12 +551,7 @@ impl Sha256RnRelation {
             Self::SmallSigma0O2 | Self::SmallSigma1O2 => SHA256_RN_SMALL_SIGMA_O2_N_COLUMNS,
             Self::BigSigma0I0 | Self::BigSigma0I1 => SHA256_RN_BIG_SIGMA0_IO_PADDED_N_COLUMNS,
             Self::BigSigma0O2 => SHA256_RN_BIG_SIGMA0_O2_N_COLUMNS,
-            Self::MajI0Low
-            | Self::MajI0High0
-            | Self::MajI0High1
-            | Self::MajI1Low0
-            | Self::MajI1Low1
-            | Self::MajI1High => SHA256_RN_MAJ_N_COLUMNS,
+            Self::MajI0LowI1High | Self::MajI0High0I1Low0 | Self::MajI0High1I1Low1 => SHA256_RN_MAJ_N_COLUMNS,
             Self::ChLeftI0Low
             | Self::ChLeftI0High
             | Self::ChLeftI1Low
@@ -610,6 +576,7 @@ impl Sha256RnRelation {
             | Self::SmallSigma1I0
             | Self::SmallSigma1I1
             | Self::SmallSigma1O2 => SHA256_RN_SCHEDULE_EXTENSIONS,
+            Self::MajI0LowI1High | Self::MajI0High0I1Low0 | Self::MajI0High1I1Low1 => SHA256_RN_COMPRESS_ROUNDS * 2,
             Self::Range16 => SHA256_RN_RANGE16_REQUESTS_PER_ROW,
             _ => SHA256_RN_COMPRESS_ROUNDS,
         }
@@ -665,24 +632,15 @@ impl Sha256RnRelation {
                 SHA256_RN_VIRTUAL_BIG_SIGMA0_O2_START,
                 SHA256_RN_VIRTUAL_BIG_SIGMA0_O2_ARITY,
             ),
-            Self::MajI0Low => (SHA256_RN_VIRTUAL_MAJ_I0_LOW_START, SHA256_RN_VIRTUAL_MAJ_I0_LOW_ARITY),
-            Self::MajI0High0 => (
+            Self::MajI0LowI1High => (SHA256_RN_VIRTUAL_MAJ_I0_LOW_START, SHA256_RN_VIRTUAL_MAJ_I0_LOW_ARITY),
+            Self::MajI0High0I1Low0 => (
                 SHA256_RN_VIRTUAL_MAJ_I0_HIGH_0_START,
                 SHA256_RN_VIRTUAL_MAJ_I0_HIGH_0_ARITY,
             ),
-            Self::MajI0High1 => (
+            Self::MajI0High1I1Low1 => (
                 SHA256_RN_VIRTUAL_MAJ_I0_HIGH_1_START,
                 SHA256_RN_VIRTUAL_MAJ_I0_HIGH_1_ARITY,
             ),
-            Self::MajI1Low0 => (
-                SHA256_RN_VIRTUAL_MAJ_I1_LOW_0_START,
-                SHA256_RN_VIRTUAL_MAJ_I1_LOW_0_ARITY,
-            ),
-            Self::MajI1Low1 => (
-                SHA256_RN_VIRTUAL_MAJ_I1_LOW_1_START,
-                SHA256_RN_VIRTUAL_MAJ_I1_LOW_1_ARITY,
-            ),
-            Self::MajI1High => (SHA256_RN_VIRTUAL_MAJ_I1_HIGH_START, SHA256_RN_VIRTUAL_MAJ_I1_HIGH_ARITY),
             Self::ChLeftI0Low => (
                 SHA256_RN_VIRTUAL_CH_LEFT_I0_LOW_START,
                 SHA256_RN_VIRTUAL_CH_LEFT_I0_LOW_ARITY,
@@ -734,12 +692,9 @@ fn relations() -> [Sha256RnRelation; SHA256_RN_FIXED_LOOKUP_N_RELATIONS] {
         Sha256RnRelation::BigSigma0I0,
         Sha256RnRelation::BigSigma0I1,
         Sha256RnRelation::BigSigma0O2,
-        Sha256RnRelation::MajI0Low,
-        Sha256RnRelation::MajI0High0,
-        Sha256RnRelation::MajI0High1,
-        Sha256RnRelation::MajI1Low0,
-        Sha256RnRelation::MajI1Low1,
-        Sha256RnRelation::MajI1High,
+        Sha256RnRelation::MajI0LowI1High,
+        Sha256RnRelation::MajI0High0I1Low0,
+        Sha256RnRelation::MajI0High1I1Low1,
         Sha256RnRelation::ChLeftI0Low,
         Sha256RnRelation::ChLeftI0High,
         Sha256RnRelation::ChLeftI1Low,
@@ -769,12 +724,9 @@ pub fn sha256_rn_fixed_lookup_multiplicity_trace_layouts() -> Vec<StackSectionDe
                 Sha256RnRelation::BigSigma0I0 => SHA256_RN_BIG_SIGMA0_I0_MULT_SECTION,
                 Sha256RnRelation::BigSigma0I1 => SHA256_RN_BIG_SIGMA0_I1_MULT_SECTION,
                 Sha256RnRelation::BigSigma0O2 => SHA256_RN_BIG_SIGMA0_O2_MULT_SECTION,
-                Sha256RnRelation::MajI0Low => SHA256_RN_MAJ_I0_LOW_MULT_SECTION,
-                Sha256RnRelation::MajI0High0 => SHA256_RN_MAJ_I0_HIGH_0_MULT_SECTION,
-                Sha256RnRelation::MajI0High1 => SHA256_RN_MAJ_I0_HIGH_1_MULT_SECTION,
-                Sha256RnRelation::MajI1Low0 => SHA256_RN_MAJ_I1_LOW_0_MULT_SECTION,
-                Sha256RnRelation::MajI1Low1 => SHA256_RN_MAJ_I1_LOW_1_MULT_SECTION,
-                Sha256RnRelation::MajI1High => SHA256_RN_MAJ_I1_HIGH_MULT_SECTION,
+                Sha256RnRelation::MajI0LowI1High => SHA256_RN_MAJ_I0_LOW_I1_HIGH_MULT_SECTION,
+                Sha256RnRelation::MajI0High0I1Low0 => SHA256_RN_MAJ_I0_HIGH_0_I1_LOW_0_MULT_SECTION,
+                Sha256RnRelation::MajI0High1I1Low1 => SHA256_RN_MAJ_I0_HIGH_1_I1_LOW_1_MULT_SECTION,
                 Sha256RnRelation::ChLeftI0Low => SHA256_RN_CH_LEFT_I0_LOW_MULT_SECTION,
                 Sha256RnRelation::ChLeftI0High => SHA256_RN_CH_LEFT_I0_HIGH_MULT_SECTION,
                 Sha256RnRelation::ChLeftI1Low => SHA256_RN_CH_LEFT_I1_LOW_MULT_SECTION,
@@ -797,12 +749,9 @@ fn maj_u32(a: u32, b: u32, c: u32) -> u32 {
 
 fn maj_mask(relation: Sha256RnRelation) -> Option<u32> {
     match relation {
-        Sha256RnRelation::MajI0Low => Some(BigSigma0::I0_L),
-        Sha256RnRelation::MajI0High0 => Some(BigSigma0::I0_H0),
-        Sha256RnRelation::MajI0High1 => Some(BigSigma0::I0_H1),
-        Sha256RnRelation::MajI1Low0 => Some(BigSigma0::I1_L0),
-        Sha256RnRelation::MajI1Low1 => Some(BigSigma0::I1_L1),
-        Sha256RnRelation::MajI1High => Some(BigSigma0::I1_H),
+        Sha256RnRelation::MajI0LowI1High => Some(BigSigma0::I0_L),
+        Sha256RnRelation::MajI0High0I1Low0 => Some(BigSigma0::I0_H0),
+        Sha256RnRelation::MajI0High1I1Low1 => Some(BigSigma0::I0_H1),
         _ => None,
     }
 }
@@ -980,12 +929,7 @@ fn fixed_tuple_value_at(relation: Sha256RnRelation, row: usize, value_idx: usize
                 _ => unreachable!("invalid BigSigma0O2 tuple index"),
             }
         }
-        Sha256RnRelation::MajI0Low
-        | Sha256RnRelation::MajI0High0
-        | Sha256RnRelation::MajI0High1
-        | Sha256RnRelation::MajI1Low0
-        | Sha256RnRelation::MajI1Low1
-        | Sha256RnRelation::MajI1High => {
+        Sha256RnRelation::MajI0LowI1High | Sha256RnRelation::MajI0High0I1Low0 | Sha256RnRelation::MajI0High1I1Low1 => {
             let mask = maj_mask(relation).unwrap();
             let n = mask.count_ones() as usize;
             let input_mask = (1 << n) - 1;
@@ -1374,12 +1318,9 @@ fn eval_fixed_columns_closed_form(relation: Sha256RnRelation, point: &[EF]) -> V
                 o2_output_mle(Sigma1::O2, side_n_vars, LIMB_MASK, BITS_PER_LIMB, point),
             ]
         }
-        Sha256RnRelation::MajI0Low
-        | Sha256RnRelation::MajI0High0
-        | Sha256RnRelation::MajI0High1
-        | Sha256RnRelation::MajI1Low0
-        | Sha256RnRelation::MajI1Low1
-        | Sha256RnRelation::MajI1High => eval_maj_fixed_columns_closed_form(maj_mask(relation).unwrap(), point),
+        Sha256RnRelation::MajI0LowI1High | Sha256RnRelation::MajI0High0I1Low0 | Sha256RnRelation::MajI0High1I1Low1 => {
+            eval_maj_fixed_columns_closed_form(maj_mask(relation).unwrap(), point)
+        }
         Sha256RnRelation::ChLeftI0Low
         | Sha256RnRelation::ChLeftI0High
         | Sha256RnRelation::ChLeftI1Low
@@ -1392,21 +1333,63 @@ fn eval_fixed_columns_closed_form(relation: Sha256RnRelation, point: &[EF]) -> V
     }
 }
 
+fn fused_maj_virtual_start_and_arity(relation: Sha256RnRelation, request_slot: usize) -> Option<(usize, usize, usize)> {
+    let round = request_slot / 2;
+    let lane = request_slot % 2;
+    match (relation, lane) {
+        (Sha256RnRelation::MajI0LowI1High, 0) => Some((
+            round,
+            SHA256_RN_VIRTUAL_MAJ_I0_LOW_START,
+            SHA256_RN_VIRTUAL_MAJ_I0_LOW_ARITY,
+        )),
+        (Sha256RnRelation::MajI0LowI1High, 1) => Some((
+            round,
+            SHA256_RN_VIRTUAL_MAJ_I1_HIGH_START,
+            SHA256_RN_VIRTUAL_MAJ_I1_HIGH_ARITY,
+        )),
+        (Sha256RnRelation::MajI0High0I1Low0, 0) => Some((
+            round,
+            SHA256_RN_VIRTUAL_MAJ_I0_HIGH_0_START,
+            SHA256_RN_VIRTUAL_MAJ_I0_HIGH_0_ARITY,
+        )),
+        (Sha256RnRelation::MajI0High0I1Low0, 1) => Some((
+            round,
+            SHA256_RN_VIRTUAL_MAJ_I1_LOW_0_START,
+            SHA256_RN_VIRTUAL_MAJ_I1_LOW_0_ARITY,
+        )),
+        (Sha256RnRelation::MajI0High1I1Low1, 0) => Some((
+            round,
+            SHA256_RN_VIRTUAL_MAJ_I0_HIGH_1_START,
+            SHA256_RN_VIRTUAL_MAJ_I0_HIGH_1_ARITY,
+        )),
+        (Sha256RnRelation::MajI0High1I1Low1, 1) => Some((
+            round,
+            SHA256_RN_VIRTUAL_MAJ_I1_LOW_1_START,
+            SHA256_RN_VIRTUAL_MAJ_I1_LOW_1_ARITY,
+        )),
+        _ => None,
+    }
+}
+
 fn tuple_from_trace_value(
     trace: &TableTrace,
     row: usize,
     relation: Sha256RnRelation,
-    round: usize,
+    request_slot: usize,
     value_idx: usize,
 ) -> F {
+    if let Some((round, start, arity)) = fused_maj_virtual_start_and_arity(relation, request_slot) {
+        debug_assert!(value_idx < arity);
+        return trace.virtual_columns[start + round * arity + value_idx][row];
+    }
     let (start, arity) = relation.virtual_start_and_arity();
     debug_assert!(value_idx < arity);
-    trace.virtual_columns[start + round * arity + value_idx][row]
+    trace.virtual_columns[start + request_slot * arity + value_idx][row]
 }
 
-fn tuple_from_trace(trace: &TableTrace, row: usize, relation: Sha256RnRelation, round: usize) -> Vec<F> {
+fn tuple_from_trace(trace: &TableTrace, row: usize, relation: Sha256RnRelation, request_slot: usize) -> Vec<F> {
     (0..relation.arity())
-        .map(|value_idx| tuple_from_trace_value(trace, row, relation, round, value_idx))
+        .map(|value_idx| tuple_from_trace_value(trace, row, relation, request_slot, value_idx))
         .collect()
 }
 
@@ -1486,12 +1469,7 @@ fn relation_index(relation: Sha256RnRelation, tuple: &[F]) -> usize {
             debug_assert!(right < (1 << SHA256_RN_BIG_SIGMA0_O2_INPUT_LOG_N_ROWS));
             (left << SHA256_RN_BIG_SIGMA0_O2_INPUT_LOG_N_ROWS) + right
         }
-        Sha256RnRelation::MajI0Low
-        | Sha256RnRelation::MajI0High0
-        | Sha256RnRelation::MajI0High1
-        | Sha256RnRelation::MajI1Low0
-        | Sha256RnRelation::MajI1Low1
-        | Sha256RnRelation::MajI1High => {
+        Sha256RnRelation::MajI0LowI1High | Sha256RnRelation::MajI0High0I1Low0 | Sha256RnRelation::MajI0High1I1Low1 => {
             let mask = maj_mask(relation).unwrap();
             let n = mask.count_ones() as usize;
             let a = pext_u32(tuple[0].to_usize() as u32, mask) as usize;
@@ -2040,7 +2018,13 @@ pub fn verify_sha256_rn_fixed_lookup(
                 let values = if relation == Sha256RnRelation::Range16 {
                     vec![range16_requests[round]]
                 } else {
-                    let c_round = &rn_cols.compression[round];
+                    let compression_round = match relation {
+                        Sha256RnRelation::MajI0LowI1High
+                        | Sha256RnRelation::MajI0High0I1Low0
+                        | Sha256RnRelation::MajI0High1I1Low1 => round / 2,
+                        _ => round,
+                    };
+                    let c_round = &rn_cols.compression[compression_round];
                     match relation {
                         Sha256RnRelation::BigSigma1I0 => vec![
                             c_round.e_i0_low,
@@ -2142,42 +2126,57 @@ pub fn verify_sha256_rn_fixed_lookup(
                             c_round.sigma_0_o2_low,
                             c_round.sigma_0_o2_high,
                         ],
-                        Sha256RnRelation::MajI0Low => vec![
-                            rn_states[round][0] - c_round.a_i1_low_0 - c_round.a_i1_low_1 * two_8,
-                            rn_states[round][2] - c_round.b_i1_low_0 - c_round.b_i1_low_1 * two_8,
-                            rn_states[round][4] - c_round.c_i1_low_0 - c_round.c_i1_low_1 * two_8,
-                            c_round.maj_i0_low,
-                        ],
-                        Sha256RnRelation::MajI0High0 => vec![
-                            c_round.a_i0_high_0,
-                            c_round.b_i0_high_0,
-                            c_round.c_i0_high_0,
-                            c_round.maj_i0_high_0,
-                        ],
-                        Sha256RnRelation::MajI0High1 => vec![
-                            c_round.a_i0_high_1,
-                            c_round.b_i0_high_1,
-                            c_round.c_i0_high_1,
-                            c_round.maj_i0_high_1,
-                        ],
-                        Sha256RnRelation::MajI1Low0 => vec![
-                            c_round.a_i1_low_0,
-                            c_round.b_i1_low_0,
-                            c_round.c_i1_low_0,
-                            c_round.maj_i1_low_0,
-                        ],
-                        Sha256RnRelation::MajI1Low1 => vec![
-                            c_round.a_i1_low_1,
-                            c_round.b_i1_low_1,
-                            c_round.c_i1_low_1,
-                            c_round.maj_i1_low_1,
-                        ],
-                        Sha256RnRelation::MajI1High => vec![
-                            rn_states[round][1] - c_round.a_i0_high_0 - c_round.a_i0_high_1 * two_8,
-                            rn_states[round][3] - c_round.b_i0_high_0 - c_round.b_i0_high_1 * two_8,
-                            rn_states[round][5] - c_round.c_i0_high_0 - c_round.c_i0_high_1 * two_8,
-                            c_round.maj_i1_high,
-                        ],
+                        Sha256RnRelation::MajI0LowI1High => {
+                            if round % 2 == 0 {
+                                vec![
+                                    rn_states[compression_round][0] - c_round.a_i1_low_0 - c_round.a_i1_low_1 * two_8,
+                                    rn_states[compression_round][2] - c_round.b_i1_low_0 - c_round.b_i1_low_1 * two_8,
+                                    rn_states[compression_round][4] - c_round.c_i1_low_0 - c_round.c_i1_low_1 * two_8,
+                                    c_round.maj_i0_low,
+                                ]
+                            } else {
+                                vec![
+                                    rn_states[compression_round][1] - c_round.a_i0_high_0 - c_round.a_i0_high_1 * two_8,
+                                    rn_states[compression_round][3] - c_round.b_i0_high_0 - c_round.b_i0_high_1 * two_8,
+                                    rn_states[compression_round][5] - c_round.c_i0_high_0 - c_round.c_i0_high_1 * two_8,
+                                    c_round.maj_i1_high,
+                                ]
+                            }
+                        }
+                        Sha256RnRelation::MajI0High0I1Low0 => {
+                            if round % 2 == 0 {
+                                vec![
+                                    c_round.a_i0_high_0,
+                                    c_round.b_i0_high_0,
+                                    c_round.c_i0_high_0,
+                                    c_round.maj_i0_high_0,
+                                ]
+                            } else {
+                                vec![
+                                    c_round.a_i1_low_0,
+                                    c_round.b_i1_low_0,
+                                    c_round.c_i1_low_0,
+                                    c_round.maj_i1_low_0,
+                                ]
+                            }
+                        }
+                        Sha256RnRelation::MajI0High1I1Low1 => {
+                            if round % 2 == 0 {
+                                vec![
+                                    c_round.a_i0_high_1,
+                                    c_round.b_i0_high_1,
+                                    c_round.c_i0_high_1,
+                                    c_round.maj_i0_high_1,
+                                ]
+                            } else {
+                                vec![
+                                    c_round.a_i1_low_1,
+                                    c_round.b_i1_low_1,
+                                    c_round.c_i1_low_1,
+                                    c_round.maj_i1_low_1,
+                                ]
+                            }
+                        }
                         Sha256RnRelation::ChLeftI0Low => {
                             vec![c_round.e_i0_low, c_round.f_i0_low, c_round.ch_left_i0_low]
                         }
@@ -2450,12 +2449,9 @@ mod tests {
     #[test]
     fn maj_fixed_rows_match_indexing() {
         for relation in [
-            Sha256RnRelation::MajI0Low,
-            Sha256RnRelation::MajI0High0,
-            Sha256RnRelation::MajI0High1,
-            Sha256RnRelation::MajI1Low0,
-            Sha256RnRelation::MajI1Low1,
-            Sha256RnRelation::MajI1High,
+            Sha256RnRelation::MajI0LowI1High,
+            Sha256RnRelation::MajI0High0I1Low0,
+            Sha256RnRelation::MajI0High1I1Low1,
         ] {
             let mask = maj_mask(relation).unwrap();
             let n = mask.count_ones() as usize;
@@ -2480,12 +2476,9 @@ mod tests {
     #[test]
     fn maj_closed_form_mle_matches_direct_mle() {
         for relation in [
-            Sha256RnRelation::MajI0Low,
-            Sha256RnRelation::MajI0High0,
-            Sha256RnRelation::MajI0High1,
-            Sha256RnRelation::MajI1Low0,
-            Sha256RnRelation::MajI1Low1,
-            Sha256RnRelation::MajI1High,
+            Sha256RnRelation::MajI0LowI1High,
+            Sha256RnRelation::MajI0High0I1Low0,
+            Sha256RnRelation::MajI0High1I1Low1,
         ] {
             let point = (0..relation.log_n_rows())
                 .map(|i| EF::from_usize(23 * i + 11))
@@ -2762,20 +2755,17 @@ mod tests {
     }
 
     #[test]
-    fn sha256_rn_maj_multiplicity_one_row_has_64_requests() {
+    fn sha256_rn_maj_multiplicity_one_row_has_128_requests() {
         let trace = one_row_trace(true);
         for relation in [
-            Sha256RnRelation::MajI0Low,
-            Sha256RnRelation::MajI0High0,
-            Sha256RnRelation::MajI0High1,
-            Sha256RnRelation::MajI1Low0,
-            Sha256RnRelation::MajI1Low1,
-            Sha256RnRelation::MajI1High,
+            Sha256RnRelation::MajI0LowI1High,
+            Sha256RnRelation::MajI0High0I1Low0,
+            Sha256RnRelation::MajI0High1I1Low1,
         ] {
             let mult = build_mult_trace(&trace, relation);
             assert_eq!(
                 mult.column.iter().map(|x| x.to_usize()).sum::<usize>(),
-                SHA256_RN_COMPRESS_ROUNDS
+                SHA256_RN_COMPRESS_ROUNDS * 2
             );
         }
     }
@@ -2784,12 +2774,9 @@ mod tests {
     fn sha256_rn_maj_multiplicity_inactive_row_is_zero() {
         let trace = one_row_trace(false);
         for relation in [
-            Sha256RnRelation::MajI0Low,
-            Sha256RnRelation::MajI0High0,
-            Sha256RnRelation::MajI0High1,
-            Sha256RnRelation::MajI1Low0,
-            Sha256RnRelation::MajI1Low1,
-            Sha256RnRelation::MajI1High,
+            Sha256RnRelation::MajI0LowI1High,
+            Sha256RnRelation::MajI0High0I1Low0,
+            Sha256RnRelation::MajI0High1I1Low1,
         ] {
             let mult = build_mult_trace(&trace, relation);
             assert!(mult.column.iter().all(|x| *x == F::ZERO));
@@ -2999,7 +2986,7 @@ mod tests {
         let c_high = h_in[2] >> BITS_PER_LIMB;
 
         assert_eq!(
-            tuple_from_trace(rn_trace, 0, Sha256RnRelation::MajI0Low, 0),
+            tuple_from_trace(rn_trace, 0, Sha256RnRelation::MajI0LowI1High, 0),
             vec![
                 F::from_u32(a_low & BigSigma0::I0_L),
                 F::from_u32(b_low & BigSigma0::I0_L),
@@ -3008,7 +2995,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            tuple_from_trace(rn_trace, 0, Sha256RnRelation::MajI1High, 0),
+            tuple_from_trace(rn_trace, 0, Sha256RnRelation::MajI0LowI1High, 1),
             vec![
                 F::from_u32(a_high & BigSigma0::I1_H),
                 F::from_u32(b_high & BigSigma0::I1_H),
