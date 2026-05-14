@@ -54,9 +54,11 @@ fn prove_execution_inner(
     vm_profiler: bool,
     sha256_rn_fixed_lookups: Option<&Sha256RnFixedLookupProverParams>,
 ) -> ExecutionProof {
+    let prove_total_time = std::time::Instant::now();
     check_rate(whir_config.starting_log_inv_rate)
         .map_err(|err| panic!("{err}"))
         .unwrap();
+    let time = std::time::Instant::now();
     let ExecutionTrace {
         traces,
         public_memory_size,
@@ -67,7 +69,9 @@ fn prove_execution_inner(
             .in_scope(|| execute_bytecode(bytecode, public_input, witness, vm_profiler));
         info_span!("Building execution trace").in_scope(|| get_execution_trace(bytecode, execution_result))
     });
+    println!("PROVE PHASE witness+trace: {:.3} s", time.elapsed().as_secs_f32());
 
+    let time = std::time::Instant::now();
     // Memory must be at least MIN_LOG_MEMORY_SIZE and at least bytecode size.
     // Generic logup still keeps the current memory/bytecode sizing assumptions;
     // aux traces are independent stack sections and do not force memory padding.
@@ -109,8 +113,10 @@ fn prove_execution_inner(
     }
     table_log = table_log.trim_end_matches(" | ").to_string();
     tracing::info!("Trace tables sizes: {}", table_log.magenta());
+    println!("PROVE PHASE transcript+metadata: {:.3} s", time.elapsed().as_secs_f32());
 
     // TODO parrallelize
+    let time = std::time::Instant::now();
     let mut memory_acc = F::zero_vec(memory.len());
     info_span!("Building memory access count").in_scope(|| {
         for (table, trace) in &traces {
@@ -123,15 +129,22 @@ fn prove_execution_inner(
             }
         }
     });
+    println!("PROVE PHASE memory access count: {:.3} s", time.elapsed().as_secs_f32());
 
     // // TODO parrallelize
+    let time = std::time::Instant::now();
     let mut bytecode_acc = F::zero_vec(bytecode.padded_size());
     info_span!("Building bytecode access count").in_scope(|| {
         for pc in traces[&Table::execution()].columns[COL_PC].iter() {
             bytecode_acc[pc.to_usize()] += F::ONE;
         }
     });
+    println!(
+        "PROVE PHASE bytecode access count: {:.3} s",
+        time.elapsed().as_secs_f32()
+    );
 
+    let time = std::time::Instant::now();
     let multiplicity_traces = sha256_rn_fixed_lookups
         .map(|_| {
             let trace = &traces[&Table::sha256_compress_rn()];
@@ -143,8 +156,15 @@ fn prove_execution_inner(
         .cloned()
         .map(|trace| trace.into_aux_trace())
         .collect::<Vec<_>>();
+    if sha256_rn_fixed_lookups.is_some() {
+        println!(
+            "PROVE PHASE SHA256 RN multiplicity traces: {:.3} s",
+            time.elapsed().as_secs_f32()
+        );
+    }
 
     // 1st Commitment
+    let time = std::time::Instant::now();
     let stacked_pcs_witness = stack_polynomials_and_commit(
         &mut prover_state,
         whir_config,
@@ -154,8 +174,14 @@ fn prove_execution_inner(
         &traces,
         &aux_traces,
     );
+    println!("PROVE PHASE stacked PCS commit: {:.3} s", time.elapsed().as_secs_f32());
+    println!(
+        "PROVE PHASE stacked PCS vars: {}, actual_data_len: {}",
+        stacked_pcs_witness.layout.stacked_n_vars, stacked_pcs_witness.layout.actual_data_len
+    );
 
     // logup (GKR)
+    let time = std::time::Instant::now();
     let logup_c = prover_state.sample();
     let logup_alphas = prover_state.sample_vec(log2_ceil_usize(max_bus_width_including_domainsep()));
     let logup_alphas_eq_poly = eval_eq(&logup_alphas);
@@ -170,6 +196,7 @@ fn prove_execution_inner(
         &bytecode_acc,
         &traces,
     );
+    println!("PROVE PHASE generic logup: {:.3} s", time.elapsed().as_secs_f32());
     let gkr_point = &logup_statements.gkr_point;
     let mut committed_statements: CommittedStatements = Default::default();
     for table in ALL_TABLES {
@@ -195,6 +222,7 @@ fn prove_execution_inner(
         traces.iter().map(|(table, trace)| (*table, trace.log_n_rows)).collect();
     let tables_sorted = sort_tables_by_height(&tables_log_heights);
 
+    let time = std::time::Instant::now();
     let column_refs: Vec<Vec<&[F]>> = tables_sorted
         .iter()
         .map(|(table, _)| {
@@ -211,6 +239,8 @@ fn prove_execution_inner(
         .map(|((table, _), cols)| compute_shifted_columns(&table.down_column_indexes(), cols))
         .collect();
     std::mem::drop(_span);
+    println!("PROVE PHASE shifted columns: {:.3} s", time.elapsed().as_secs_f32());
+    let time = std::time::Instant::now();
     let mut sessions = Vec::with_capacity(tables_sorted.len());
     for (idx, (table, log_n_rows)) in tables_sorted.iter().enumerate() {
         let bus_numerator_value = logup_statements.bus_numerators_values[table];
@@ -240,10 +270,17 @@ fn prove_execution_inner(
         }
         sessions.push(delegate_to_inner!(table => make_session));
     }
+    println!("PROVE PHASE AIR session setup: {:.3} s", time.elapsed().as_secs_f32());
 
+    let time = std::time::Instant::now();
     let sumcheck_air_point = info_span!("batched AIR sumcheck")
         .in_scope(|| prove_batched_air_sumcheck(&mut prover_state, &mut sessions, air_eta));
+    println!(
+        "PROVE PHASE batched AIR sumcheck: {:.3} s",
+        time.elapsed().as_secs_f32()
+    );
 
+    let time = std::time::Instant::now();
     for (idx, (table, _)) in tables_sorted.iter().enumerate() {
         let col_evals = sessions[idx].final_column_evals();
         prover_state.add_extension_scalars(&col_evals);
@@ -256,7 +293,9 @@ fn prove_execution_inner(
         let claim = delegate_to_inner!(table => split);
         committed_statements.get_mut(table).unwrap().push(claim);
     }
+    println!("PROVE PHASE AIR final openings: {:.3} s", time.elapsed().as_secs_f32());
 
+    let time = std::time::Instant::now();
     if sha256_rn_fixed_lookups.is_some() {
         let fixed_lookup_statements = prove_sha256_rn_fixed_lookup(
             &mut prover_state,
@@ -275,7 +314,14 @@ fn prove_execution_inner(
             aux_committed_statements[multiplicity_idx].push(multiplicity_claim);
         }
     }
+    if sha256_rn_fixed_lookups.is_some() {
+        println!(
+            "PROVE PHASE SHA256 RN fixed lookup total: {:.3} s",
+            time.elapsed().as_secs_f32()
+        );
+    }
 
+    let time = std::time::Instant::now();
     let public_memory_random_point = MultilinearPoint(prover_state.sample_vec(log2_strict_usize(public_memory_size)));
     let public_memory_eval = (&memory[..public_memory_size]).evaluate(&public_memory_random_point);
     let stack_layout = &stacked_pcs_witness.layout;
@@ -344,12 +390,19 @@ fn prove_execution_inner(
     }
 
     let global_statements_base = stacked_pcs_global_statements(stack_layout, previous_statements, per_section);
+    println!("PROVE PHASE PCS statements: {:.3} s", time.elapsed().as_secs_f32());
 
+    let time = std::time::Instant::now();
     WhirConfig::new(whir_config, stacked_pcs_witness.global_polynomial.by_ref().n_vars()).prove(
         &mut prover_state,
         global_statements_base,
         stacked_pcs_witness.inner_witness,
         &stacked_pcs_witness.global_polynomial.by_ref(),
+    );
+    println!("PROVE PHASE WHIR prove: {:.3} s", time.elapsed().as_secs_f32());
+    println!(
+        "PROVE PHASE total inner: {:.3} s",
+        prove_total_time.elapsed().as_secs_f32()
     );
 
     ExecutionProof {

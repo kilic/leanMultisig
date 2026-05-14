@@ -28,7 +28,7 @@ pub const MAX_LOG_N_ROWS_PER_TABLE: [(Table, usize); 5] = [
     // Direct Plonky3-style SHA256 has 7524 columns. 2^13 rows already exceeds
     // the current commitment-surface guard; 2^12 is the largest safe cap today.
     (Table::sha256_compress(), 12),
-    (Table::sha256_compress_rn(), 10),
+    (Table::sha256_compress_rn(), 12),
 ];
 
 /// Starting program counter

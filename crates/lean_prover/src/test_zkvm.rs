@@ -110,14 +110,14 @@ def main():
     let witness = ExecutionWitness::default();
     let starting_log_inv_rate = 1;
 
+    let whir_config = default_whir_config(starting_log_inv_rate);
     let time = std::time::Instant::now();
-    let proof = prove_execution(
-        &bytecode,
-        &public_input,
-        &witness,
-        &default_whir_config(starting_log_inv_rate),
-        false,
-    );
+    let proof = if precompile_name == SHA256_COMPRESS_RN_NAME {
+        let params = sha256_rn_fixed_lookup_params();
+        prove_execution_with_sha256_rn_fixed_lookups(&bytecode, &public_input, &witness, &whir_config, false, &params)
+    } else {
+        prove_execution(&bytecode, &public_input, &witness, &whir_config, false)
+    };
     let proof_time = time.elapsed();
     let proof_size_kib = proof.proof.proof_size_fe() * F::bits() / (8 * 1024);
 
@@ -126,7 +126,18 @@ def main():
     println!("Proof time: {:.3} s", proof_time.as_secs_f32());
     println!("Proof size: {proof_size_kib} KiB");
 
-    verify_execution(&bytecode, &public_input, proof.proof).unwrap();
+    if precompile_name == SHA256_COMPRESS_RN_NAME {
+        let params = sha256_rn_fixed_lookup_params();
+        verify_execution_with_sha256_rn_fixed_lookups(
+            &bytecode,
+            &public_input,
+            proof.proof,
+            params.verifier_transcript_version(),
+        )
+        .unwrap();
+    } else {
+        verify_execution(&bytecode, &public_input, proof.proof).unwrap();
+    }
 }
 
 #[test]

@@ -827,145 +827,158 @@ fn is_ch_right(relation: Sha256RnRelation) -> bool {
     )
 }
 
-fn fixed_tuple_at_row(relation: Sha256RnRelation, row: usize) -> Vec<F> {
+fn fixed_tuple_value_at(relation: Sha256RnRelation, row: usize, value_idx: usize) -> F {
+    debug_assert!(value_idx < relation.arity());
     match relation {
         Sha256RnRelation::BigSigma1I0 => {
             let x = scatter_subset(row, BigSigma1::I0);
             let y = big_sigma1(x);
-            vec![
-                F::from_u32(x & BigSigma1::I0_L),
-                F::from_u32((x >> BITS_PER_LIMB) & BigSigma1::I0_H),
-                F::from_u32(y & BigSigma1::O0_L),
-                F::from_u32((y >> BITS_PER_LIMB) & BigSigma1::O0_H),
-                F::from_u32(pext_u32(y & BigSigma1::O2, BigSigma1::O2)),
-            ]
+            match value_idx {
+                0 => F::from_u32(x & BigSigma1::I0_L),
+                1 => F::from_u32((x >> BITS_PER_LIMB) & BigSigma1::I0_H),
+                2 => F::from_u32(y & BigSigma1::O0_L),
+                3 => F::from_u32((y >> BITS_PER_LIMB) & BigSigma1::O0_H),
+                4 => F::from_u32(pext_u32(y & BigSigma1::O2, BigSigma1::O2)),
+                _ => unreachable!("invalid BigSigma1I0 tuple index"),
+            }
         }
         Sha256RnRelation::BigSigma1I1 => {
             let x = scatter_subset(row, BigSigma1::I1);
             let y = big_sigma1(x);
-            vec![
-                F::from_u32(x & BigSigma1::I1_L),
-                F::from_u32((x >> BITS_PER_LIMB) & BigSigma1::I1_H),
-                F::from_u32(y & BigSigma1::O1_L),
-                F::from_u32((y >> BITS_PER_LIMB) & BigSigma1::O1_H),
-                F::from_u32(pext_u32(y & BigSigma1::O2, BigSigma1::O2)),
-            ]
+            match value_idx {
+                0 => F::from_u32(x & BigSigma1::I1_L),
+                1 => F::from_u32((x >> BITS_PER_LIMB) & BigSigma1::I1_H),
+                2 => F::from_u32(y & BigSigma1::O1_L),
+                3 => F::from_u32((y >> BITS_PER_LIMB) & BigSigma1::O1_H),
+                4 => F::from_u32(pext_u32(y & BigSigma1::O2, BigSigma1::O2)),
+                _ => unreachable!("invalid BigSigma1I1 tuple index"),
+            }
         }
         Sha256RnRelation::BigSigma1O2 => {
             let side_log = SHA256_RN_BIG_SIGMA1_O2_INPUT_LOG_N_ROWS;
             let left_idx = row >> side_log;
             let right_idx = row & ((1 << side_log) - 1);
             let xor = scatter_subset(left_idx, BigSigma1::O2) ^ scatter_subset(right_idx, BigSigma1::O2);
-            vec![
-                F::from_usize(left_idx),
-                F::from_usize(right_idx),
-                F::from_u32(xor & LIMB_MASK),
-                F::from_u32(xor >> BITS_PER_LIMB),
-            ]
+            match value_idx {
+                0 => F::from_usize(left_idx),
+                1 => F::from_usize(right_idx),
+                2 => F::from_u32(xor & LIMB_MASK),
+                3 => F::from_u32(xor >> BITS_PER_LIMB),
+                _ => unreachable!("invalid BigSigma1O2 tuple index"),
+            }
         }
         Sha256RnRelation::SmallSigma0I0 => {
             let x = scatter_subset(row, SHA256_RN_SMALL_SIGMA0_I0);
             let y = small_sigma0(x);
-            vec![
-                F::from_u32(x & Sigma0::I0_L),
-                F::from_u32((x >> BITS_PER_LIMB) & Sigma0::I0_H),
-                F::from_u32(y & Sigma0::O0_L),
-                F::from_u32((y >> BITS_PER_LIMB) & Sigma0::O0_H),
-                F::from_u32(pext_u32(y & Sigma0::O2, Sigma0::O2)),
-            ]
+            match value_idx {
+                0 => F::from_u32(x & Sigma0::I0_L),
+                1 => F::from_u32((x >> BITS_PER_LIMB) & Sigma0::I0_H),
+                2 => F::from_u32(y & Sigma0::O0_L),
+                3 => F::from_u32((y >> BITS_PER_LIMB) & Sigma0::O0_H),
+                4 => F::from_u32(pext_u32(y & Sigma0::O2, Sigma0::O2)),
+                _ => unreachable!("invalid SmallSigma0I0 tuple index"),
+            }
         }
         Sha256RnRelation::SmallSigma0I1 => {
             let x = scatter_subset(row, SHA256_RN_SMALL_SIGMA0_I1);
             let y = small_sigma0(x);
-            vec![
-                F::from_u32(x & Sigma0::I1_L),
-                F::from_u32((x >> BITS_PER_LIMB) & Sigma0::I1_H),
-                F::from_u32(y & Sigma0::O1_L),
-                F::from_u32((y >> BITS_PER_LIMB) & Sigma0::O1_H),
-                F::from_u32(pext_u32(y & Sigma0::O2, Sigma0::O2)),
-            ]
+            match value_idx {
+                0 => F::from_u32(x & Sigma0::I1_L),
+                1 => F::from_u32((x >> BITS_PER_LIMB) & Sigma0::I1_H),
+                2 => F::from_u32(y & Sigma0::O1_L),
+                3 => F::from_u32((y >> BITS_PER_LIMB) & Sigma0::O1_H),
+                4 => F::from_u32(pext_u32(y & Sigma0::O2, Sigma0::O2)),
+                _ => unreachable!("invalid SmallSigma0I1 tuple index"),
+            }
         }
         Sha256RnRelation::SmallSigma0O2 => {
             let side_log = SHA256_RN_SMALL_SIGMA0_O2_INPUT_LOG_N_ROWS;
             let left_idx = row >> side_log;
             let right_idx = row & ((1 << side_log) - 1);
             let xor = scatter_subset(left_idx, Sigma0::O2) ^ scatter_subset(right_idx, Sigma0::O2);
-            vec![
-                F::from_usize(left_idx),
-                F::from_usize(right_idx),
-                F::from_u32(xor & LIMB_MASK),
-                F::from_u32(xor >> BITS_PER_LIMB),
-            ]
+            match value_idx {
+                0 => F::from_usize(left_idx),
+                1 => F::from_usize(right_idx),
+                2 => F::from_u32(xor & LIMB_MASK),
+                3 => F::from_u32(xor >> BITS_PER_LIMB),
+                _ => unreachable!("invalid SmallSigma0O2 tuple index"),
+            }
         }
         Sha256RnRelation::SmallSigma1I0 => {
             let x = scatter_subset(row, SHA256_RN_SMALL_SIGMA1_I0);
             let y = small_sigma1(x);
-            vec![
-                F::from_u32(x & Sigma1::I0_L),
-                F::from_u32((x >> BITS_PER_LIMB) & Sigma1::I0_H),
-                F::from_u32(y & Sigma1::O0_L),
-                F::from_u32((y >> BITS_PER_LIMB) & Sigma1::O0_H),
-                F::from_u32(pext_u32(y & Sigma1::O2, Sigma1::O2)),
-            ]
+            match value_idx {
+                0 => F::from_u32(x & Sigma1::I0_L),
+                1 => F::from_u32((x >> BITS_PER_LIMB) & Sigma1::I0_H),
+                2 => F::from_u32(y & Sigma1::O0_L),
+                3 => F::from_u32((y >> BITS_PER_LIMB) & Sigma1::O0_H),
+                4 => F::from_u32(pext_u32(y & Sigma1::O2, Sigma1::O2)),
+                _ => unreachable!("invalid SmallSigma1I0 tuple index"),
+            }
         }
         Sha256RnRelation::SmallSigma1I1 => {
             let x = scatter_subset(row, SHA256_RN_SMALL_SIGMA1_I1);
             let y = small_sigma1(x);
-            vec![
-                F::from_u32(x & Sigma1::I1_L),
-                F::from_u32((x >> BITS_PER_LIMB) & Sigma1::I1_H),
-                F::from_u32(y & Sigma1::O1_L),
-                F::from_u32((y >> BITS_PER_LIMB) & Sigma1::O1_H),
-                F::from_u32(pext_u32(y & Sigma1::O2, Sigma1::O2)),
-            ]
+            match value_idx {
+                0 => F::from_u32(x & Sigma1::I1_L),
+                1 => F::from_u32((x >> BITS_PER_LIMB) & Sigma1::I1_H),
+                2 => F::from_u32(y & Sigma1::O1_L),
+                3 => F::from_u32((y >> BITS_PER_LIMB) & Sigma1::O1_H),
+                4 => F::from_u32(pext_u32(y & Sigma1::O2, Sigma1::O2)),
+                _ => unreachable!("invalid SmallSigma1I1 tuple index"),
+            }
         }
         Sha256RnRelation::SmallSigma1O2 => {
             let side_log = SHA256_RN_SMALL_SIGMA1_O2_INPUT_LOG_N_ROWS;
             let left_idx = row >> side_log;
             let right_idx = row & ((1 << side_log) - 1);
             let xor = scatter_subset(left_idx, Sigma1::O2) ^ scatter_subset(right_idx, Sigma1::O2);
-            vec![
-                F::from_usize(left_idx),
-                F::from_usize(right_idx),
-                F::from_u32(xor & LIMB_MASK),
-                F::from_u32(xor >> BITS_PER_LIMB),
-            ]
+            match value_idx {
+                0 => F::from_usize(left_idx),
+                1 => F::from_usize(right_idx),
+                2 => F::from_u32(xor & LIMB_MASK),
+                3 => F::from_u32(xor >> BITS_PER_LIMB),
+                _ => unreachable!("invalid SmallSigma1O2 tuple index"),
+            }
         }
         Sha256RnRelation::BigSigma0I0 => {
             let x = scatter_subset(row, SHA256_RN_BIG_SIGMA0_I0);
             let y = big_sigma0(x);
-            vec![
-                F::from_u32(x & BigSigma0::I0_L),
-                F::from_u32((x >> BITS_PER_LIMB) & BigSigma0::I0_H0),
-                F::from_u32((x >> 24) & BigSigma0::I0_H1),
-                F::from_u32(y & BigSigma0::O0_L),
-                F::from_u32((y >> BITS_PER_LIMB) & BigSigma0::O0_H),
-                F::from_u32(pext_u32(y & BigSigma0::O2, BigSigma0::O2)),
-            ]
+            match value_idx {
+                0 => F::from_u32(x & BigSigma0::I0_L),
+                1 => F::from_u32((x >> BITS_PER_LIMB) & BigSigma0::I0_H0),
+                2 => F::from_u32((x >> 24) & BigSigma0::I0_H1),
+                3 => F::from_u32(y & BigSigma0::O0_L),
+                4 => F::from_u32((y >> BITS_PER_LIMB) & BigSigma0::O0_H),
+                5 => F::from_u32(pext_u32(y & BigSigma0::O2, BigSigma0::O2)),
+                _ => unreachable!("invalid BigSigma0I0 tuple index"),
+            }
         }
         Sha256RnRelation::BigSigma0I1 => {
             let x = scatter_subset(row, SHA256_RN_BIG_SIGMA0_I1);
             let y = big_sigma0(x);
-            vec![
-                F::from_u32(x & BigSigma0::I1_L0),
-                F::from_u32((x >> 8) & BigSigma0::I1_L1),
-                F::from_u32((x >> BITS_PER_LIMB) & BigSigma0::I1_H),
-                F::from_u32(y & BigSigma0::O1_L),
-                F::from_u32((y >> BITS_PER_LIMB) & BigSigma0::O1_H),
-                F::from_u32(pext_u32(y & BigSigma0::O2, BigSigma0::O2)),
-            ]
+            match value_idx {
+                0 => F::from_u32(x & BigSigma0::I1_L0),
+                1 => F::from_u32((x >> 8) & BigSigma0::I1_L1),
+                2 => F::from_u32((x >> BITS_PER_LIMB) & BigSigma0::I1_H),
+                3 => F::from_u32(y & BigSigma0::O1_L),
+                4 => F::from_u32((y >> BITS_PER_LIMB) & BigSigma0::O1_H),
+                5 => F::from_u32(pext_u32(y & BigSigma0::O2, BigSigma0::O2)),
+                _ => unreachable!("invalid BigSigma0I1 tuple index"),
+            }
         }
         Sha256RnRelation::BigSigma0O2 => {
             let side_log = SHA256_RN_BIG_SIGMA0_O2_INPUT_LOG_N_ROWS;
             let left_idx = row >> side_log;
             let right_idx = row & ((1 << side_log) - 1);
             let xor = scatter_subset(left_idx, BigSigma0::O2) ^ scatter_subset(right_idx, BigSigma0::O2);
-            vec![
-                F::from_usize(left_idx),
-                F::from_usize(right_idx),
-                F::from_u32(xor & LIMB_MASK),
-                F::from_u32(xor >> BITS_PER_LIMB),
-            ]
+            match value_idx {
+                0 => F::from_usize(left_idx),
+                1 => F::from_usize(right_idx),
+                2 => F::from_u32(xor & LIMB_MASK),
+                3 => F::from_u32(xor >> BITS_PER_LIMB),
+                _ => unreachable!("invalid BigSigma0O2 tuple index"),
+            }
         }
         Sha256RnRelation::MajI0Low
         | Sha256RnRelation::MajI0High0
@@ -982,12 +995,13 @@ fn fixed_tuple_at_row(relation: Sha256RnRelation, row: usize) -> Vec<F> {
             let a = scatter_subset(a_idx, mask);
             let b = scatter_subset(b_idx, mask);
             let c = scatter_subset(c_idx, mask);
-            vec![
-                F::from_u32(a),
-                F::from_u32(b),
-                F::from_u32(c),
-                F::from_u32(maj_u32(a, b, c)),
-            ]
+            match value_idx {
+                0 => F::from_u32(a),
+                1 => F::from_u32(b),
+                2 => F::from_u32(c),
+                3 => F::from_u32(maj_u32(a, b, c)),
+                _ => unreachable!("invalid Maj tuple index"),
+            }
         }
         Sha256RnRelation::ChLeftI0Low
         | Sha256RnRelation::ChLeftI0High
@@ -1009,13 +1023,27 @@ fn fixed_tuple_at_row(relation: Sha256RnRelation, row: usize) -> Vec<F> {
             } else {
                 e & other
             };
-            vec![F::from_u32(e), F::from_u32(other), F::from_u32(out)]
+            match value_idx {
+                0 => F::from_u32(e),
+                1 => F::from_u32(other),
+                2 => F::from_u32(out),
+                _ => unreachable!("invalid Ch tuple index"),
+            }
         }
         Sha256RnRelation::Range16 => {
             debug_assert!(row < (1 << SHA256_RN_RANGE16_LOG_N_ROWS));
-            vec![F::from_usize(row)]
+            match value_idx {
+                0 => F::from_usize(row),
+                _ => unreachable!("invalid Range16 tuple index"),
+            }
         }
     }
+}
+
+fn fixed_tuple_at_row(relation: Sha256RnRelation, row: usize) -> Vec<F> {
+    (0..relation.arity())
+        .map(|value_idx| fixed_tuple_value_at(relation, row, value_idx))
+        .collect()
 }
 
 fn bit_from_scattered_mask(mask: u32, bit_position: usize, point: &[EF]) -> EF {
@@ -1364,14 +1392,22 @@ fn eval_fixed_columns_closed_form(relation: Sha256RnRelation, point: &[EF]) -> V
     }
 }
 
-fn tuple_from_trace(trace: &TableTrace, row: usize, relation: Sha256RnRelation, round: usize) -> Vec<F> {
-    let mut tuple = vec![F::ZERO; relation.arity()];
+fn tuple_from_trace_value(
+    trace: &TableTrace,
+    row: usize,
+    relation: Sha256RnRelation,
+    round: usize,
+    value_idx: usize,
+) -> F {
     let (start, arity) = relation.virtual_start_and_arity();
-    for (i, slot) in tuple.iter_mut().enumerate() {
-        debug_assert!(i < arity);
-        *slot = trace.virtual_columns[start + round * arity + i][row];
-    }
-    tuple
+    debug_assert!(value_idx < arity);
+    trace.virtual_columns[start + round * arity + value_idx][row]
+}
+
+fn tuple_from_trace(trace: &TableTrace, row: usize, relation: Sha256RnRelation, round: usize) -> Vec<F> {
+    (0..relation.arity())
+        .map(|value_idx| tuple_from_trace_value(trace, row, relation, round, value_idx))
+        .collect()
 }
 
 fn relation_index(relation: Sha256RnRelation, tuple: &[F]) -> usize {
@@ -1490,8 +1526,12 @@ fn build_mult_trace(trace: &TableTrace, relation: Sha256RnRelation) -> Multiplic
             continue;
         }
         for round in 0..relation.request_rounds() {
-            let tuple = tuple_from_trace(trace, row, relation, round);
-            mult[relation_index(relation, &tuple)] += F::ONE;
+            let arity = relation.arity();
+            let mut tuple = [F::ZERO; SHA256_RN_FIXED_LOOKUP_MAX_ARITY];
+            for (value_idx, value) in tuple[..arity].iter_mut().enumerate() {
+                *value = tuple_from_trace_value(trace, row, relation, round, value_idx);
+            }
+            mult[relation_index(relation, &tuple[..arity])] += F::ONE;
         }
     }
     MultiplicityTrace {
@@ -1703,6 +1743,7 @@ pub fn prove_sha256_rn_fixed_lookup(
     trace: &TableTrace,
     fixed_lookup_multiplicity_traces: &[MultiplicityTrace],
 ) -> Sha256RnFixedLookupStatements {
+    let fixed_total_time = std::time::Instant::now();
     let log_n_rows = trace.log_n_rows;
     let n_rows = 1 << log_n_rows;
     debug_assert_eq!(trace.columns[SHA256_RN_COL_FLAG].len(), n_rows);
@@ -1712,14 +1753,25 @@ pub fn prove_sha256_rn_fixed_lookup(
     );
 
     let sections = logup_sections(log_n_rows);
+    let table_sections = sections
+        .iter()
+        .filter(|section| matches!(section, LogupSection::Table(_)))
+        .count();
+    let request_sections = sections.len() - table_sections;
     let total_active_len = sections
         .iter()
         .map(|section| 1 << section.log_n_rows(log_n_rows))
         .sum::<usize>();
+    let request_active_len = request_sections * n_rows;
+    let table_active_len = total_active_len - request_active_len;
     let total_len = 1usize << log2_ceil_usize(total_active_len);
     let width = packing_width::<EF>();
     assert!(total_len.is_multiple_of(width));
+    println!(
+        "SHA256 RN fixed lookup sections: tables={table_sections}, requests={request_sections}, table_rows={table_active_len}, request_rows={request_active_len}, padded_rows={total_len}"
+    );
 
+    let time = std::time::Instant::now();
     let c = prover_state.sample();
     let alphas = prover_state.sample_vec(log2_ceil_usize(SHA256_RN_FIXED_LOOKUP_MAX_ARITY + 1));
     let alphas_eq_poly = eval_eq(&alphas);
@@ -1744,10 +1796,18 @@ pub fn prove_sha256_rn_fixed_lookup(
     let mut numerators = F::zero_vec(total_len);
     let mut denominators = vec![EFPacking::<EF>::ONE; total_len / width];
     let mut offset = 0;
+    println!(
+        "SHA256 RN fixed lookup setup+alloc: {:.3} s",
+        time.elapsed().as_secs_f32()
+    );
 
+    let table_fill_time = std::time::Instant::now();
+    let mut table_fill_elapsed = std::time::Duration::ZERO;
+    let mut request_fill_elapsed = std::time::Duration::ZERO;
     for section in &sections {
         match *section {
             LogupSection::Table(relation) => {
+                let section_time = std::time::Instant::now();
                 let section_log_n_rows = section.log_n_rows(log_n_rows);
                 let section_n_rows = 1 << section_log_n_rows;
                 let mult = &fixed_lookup_multiplicity_traces[relation.multiplicity_index()].column;
@@ -1766,18 +1826,21 @@ pub fn prove_sha256_rn_fixed_lookup(
                     .iter_mut()
                     .enumerate()
                     .for_each(|(p, slot)| {
-                        let mut values = vec![PFPacking::<EF>::ZERO; relation.arity()];
-                        for (value_idx, value) in values.iter_mut().enumerate() {
+                        let arity = relation.arity();
+                        let mut values = [PFPacking::<EF>::ZERO; SHA256_RN_FIXED_LOOKUP_MAX_ARITY];
+                        for (value_idx, value) in values[..arity].iter_mut().enumerate() {
                             *value =
-                                PFPacking::<EF>::from_fn(|w| fixed_tuple_at_row(relation, src_idx(p, w))[value_idx]);
+                                PFPacking::<EF>::from_fn(|w| fixed_tuple_value_at(relation, src_idx(p, w), value_idx));
                         }
                         let table_contrib =
                             EFPacking::<EF>::from(*alphas_eq_poly.last().unwrap() * relation.domain_separator());
-                        *slot = c_packed - finger_print_packed::<EF>(table_contrib, &values, &alphas_packed);
+                        *slot = c_packed - finger_print_packed::<EF>(table_contrib, &values[..arity], &alphas_packed);
                     });
                 offset += section_n_rows;
+                table_fill_elapsed += section_time.elapsed();
             }
             LogupSection::Request { relation, round } => {
+                let section_time = std::time::Instant::now();
                 numerators[offset..offset + n_rows]
                     .chunks_exact_mut(chunk_size)
                     .enumerate()
@@ -1791,30 +1854,51 @@ pub fn prove_sha256_rn_fixed_lookup(
                     .iter_mut()
                     .enumerate()
                     .for_each(|(p, slot)| {
-                        let mut values = vec![PFPacking::<EF>::ZERO; relation.arity()];
-                        for (value_idx, value) in values.iter_mut().enumerate() {
+                        let arity = relation.arity();
+                        let mut values = [PFPacking::<EF>::ZERO; SHA256_RN_FIXED_LOOKUP_MAX_ARITY];
+                        for (value_idx, value) in values[..arity].iter_mut().enumerate() {
                             *value = PFPacking::<EF>::from_fn(|w| {
-                                tuple_from_trace(trace, src_idx(p, w), relation, round)[value_idx]
+                                tuple_from_trace_value(trace, src_idx(p, w), relation, round, value_idx)
                             });
                         }
                         let table_contrib =
                             EFPacking::<EF>::from(*alphas_eq_poly.last().unwrap() * relation.domain_separator());
-                        *slot = c_packed - finger_print_packed::<EF>(table_contrib, &values, &alphas_packed);
+                        *slot = c_packed - finger_print_packed::<EF>(table_contrib, &values[..arity], &alphas_packed);
                     });
                 offset += n_rows;
+                request_fill_elapsed += section_time.elapsed();
             }
         }
     }
     assert_eq!(offset, total_active_len);
+    println!(
+        "SHA256 RN fixed lookup fill fractions: {:.3} s (table {:.3} s, request {:.3} s)",
+        table_fill_time.elapsed().as_secs_f32(),
+        table_fill_elapsed.as_secs_f32(),
+        request_fill_elapsed.as_secs_f32()
+    );
 
-    let (sum, gkr_point) = prove_gkr_quotient::<EF>(
-        prover_state,
-        PFPacking::<EF>::pack_slice(&numerators),
-        &denominators,
-        pivot,
+    let fixed_gkr_time = std::time::Instant::now();
+    let (sum, gkr_point) = tracing::info_span!("SHA256 RN fixed lookup GKR").in_scope(|| {
+        prove_gkr_quotient::<EF>(
+            prover_state,
+            PFPacking::<EF>::pack_slice(&numerators),
+            &denominators,
+            pivot,
+        )
+    });
+    let fixed_gkr_elapsed = fixed_gkr_time.elapsed();
+    tracing::info!(
+        "SHA256 RN fixed lookup GKR proof time: {:.3} s",
+        fixed_gkr_elapsed.as_secs_f32()
+    );
+    println!(
+        "SHA256 RN fixed lookup GKR proof time: {:.3} s",
+        fixed_gkr_elapsed.as_secs_f32()
     );
     assert_eq!(sum, EF::ZERO);
 
+    let time = std::time::Instant::now();
     let mut multiplicity_claims = Vec::with_capacity(SHA256_RN_FIXED_LOOKUP_N_RELATIONS);
     for relation in sections.iter().filter_map(|section| match section {
         LogupSection::Table(relation) => Some(*relation),
@@ -1831,7 +1915,12 @@ pub fn prove_sha256_rn_fixed_lookup(
             (fixed_point.clone(), BTreeMap::from([(0, mult_eval)])),
         ));
     }
+    println!(
+        "SHA256 RN fixed lookup multiplicity openings: {:.3} s",
+        time.elapsed().as_secs_f32()
+    );
 
+    let time = std::time::Instant::now();
     let point = MultilinearPoint(from_end(&gkr_point.0, log_n_rows).to_vec());
     let flag_eval = trace.columns[SHA256_RN_COL_FLAG].evaluate(&point);
     let sha_values_vec = trace.columns[SHA256_RN_COL_AIR_START..]
@@ -1852,6 +1941,14 @@ pub fn prove_sha256_rn_fixed_lookup(
                 .map(|(idx, value)| (SHA256_RN_COL_AIR_START + idx, value)),
         )
         .collect::<BTreeMap<_, _>>();
+    println!(
+        "SHA256 RN fixed lookup RN column openings: {:.3} s",
+        time.elapsed().as_secs_f32()
+    );
+    println!(
+        "SHA256 RN fixed lookup total detail: {:.3} s",
+        fixed_total_time.elapsed().as_secs_f32()
+    );
 
     Sha256RnFixedLookupStatements {
         rn_claim: (point, values),
