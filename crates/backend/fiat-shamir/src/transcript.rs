@@ -1,5 +1,6 @@
 use field::Field;
 use serde::{Deserialize, Serialize};
+use symetric::merkle::Sha256Digest;
 
 use crate::PrunedMerklePaths;
 
@@ -35,6 +36,41 @@ pub struct Proof<F, Digest = [F; DIGEST_LEN_FE]> {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(crate) commitments: Vec<Digest>,
     pub(crate) merkle_paths: Vec<PrunedMerklePaths<F, Digest>>,
+}
+
+pub trait ProofDigestSize<F: Field> {
+    fn digest_size_bytes() -> usize;
+}
+
+impl<F: Field> ProofDigestSize<F> for [F; DIGEST_LEN_FE] {
+    fn digest_size_bytes() -> usize {
+        DIGEST_LEN_FE * F::bits().div_ceil(8)
+    }
+}
+
+impl<F: Field> ProofDigestSize<F> for Sha256Digest {
+    fn digest_size_bytes() -> usize {
+        size_of::<Sha256Digest>()
+    }
+}
+
+impl<F: Field, Digest: ProofDigestSize<F>> Proof<F, Digest> {
+    pub fn proof_size_bytes(&self) -> usize {
+        let field_bytes = F::bits().div_ceil(8);
+        let merkle_size: usize = self
+            .merkle_paths
+            .iter()
+            .map(|paths| {
+                paths.leaf_data.iter().map(|d| d.len() * field_bytes).sum::<usize>()
+                    + paths
+                        .paths
+                        .iter()
+                        .map(|(_, sh): &(_, Vec<_>)| sh.len() * Digest::digest_size_bytes())
+                        .sum::<usize>()
+            })
+            .sum();
+        self.transcript.len() * field_bytes + self.commitments.len() * Digest::digest_size_bytes() + merkle_size
+    }
 }
 
 impl<F: Field> Proof<F> {

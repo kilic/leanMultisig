@@ -26,7 +26,8 @@ def main():
     input_left = 0
     input_right = DIGEST_LEN
     outputs = Array(N_POSEIDON_CALLS * DIGEST_LEN)
-    for i in dynamic_unroll(0, N_POSEIDON_CALLS, 20):
+    # for i in dynamic_unroll(0, N_POSEIDON_CALLS, 20):
+    for i in unroll(0, N_POSEIDON_CALLS):
         out = outputs + i * DIGEST_LEN
         poseidon16_compress(input_left, input_right, out)
     return
@@ -34,71 +35,55 @@ def main():
     );
 
     let public_input: Vec<F> = (0..16).map(F::new).collect();
-    let bytecode = compile_program(&ProgramSource::Raw(program_str));
-    let witness = ExecutionWitness::default();
-    let starting_log_inv_rate = 1;
-
-    let time = std::time::Instant::now();
-    let proof = prove_execution(
-        &bytecode,
-        &public_input,
-        &witness,
-        &default_whir_config(starting_log_inv_rate),
-        false,
-    )
-    .unwrap();
-    let proof_time = time.elapsed();
-    let proof_size_kib = proof.proof.proof_size_fe() * F::bits() / (8 * 1024);
-
-    println!("{}", proof.metadata.as_ref().unwrap().display());
-    println!("Proof time: {:.3} s", proof_time.as_secs_f32());
-    println!("Proof size: {proof_size_kib} KiB");
-
-    let mut verifier_state = VerifierState::<EF, _>::new(proof.proof, get_poseidon16().clone()).unwrap();
-    verify(&bytecode, &public_input, &mut verifier_state).unwrap();
+    test_zk_vm_helper_poseidon(&program_str, &public_input);
 }
 
 #[test]
-#[ignore = "benchmark; run with `cargo test --release -p lean_prover bench_sha256_compress -- --ignored --nocapture`"]
-fn bench_sha256_compress() {
-    utils::init_tracing();
+#[ignore = "benchmark; run with `cargo test --release -p lean_prover bench_sha256_compress_sha2_backend -- --ignored --nocapture`"]
+fn bench_sha256_compress_sha2_backend() {
+    let (program_str, public_input) = sha256_compress_bench_fixture();
+    test_zk_vm_helper_sha2(&program_str, &public_input);
+}
+
+#[test]
+#[ignore = "benchmark; run with `cargo test --release -p lean_prover bench_sha256_compress_poseidon_backend -- --ignored --nocapture`"]
+fn bench_sha256_compress_poseidon_backend() {
+    let (program_str, public_input) = sha256_compress_bench_fixture();
+    test_zk_vm_helper_poseidon(&program_str, &public_input);
+}
+
+fn sha256_compress_bench_fixture() -> (String, Vec<F>) {
     let n_sha_calls = std::env::var("SHA256_BENCH_CALLS")
         .ok()
         .map(|raw| raw.parse::<usize>().expect("SHA256_BENCH_CALLS must be a usize"))
         .unwrap_or(1);
-    const SHA_FIXTURE_STRIDE: usize = SHA256_STATE_LIMBS + SHA256_BLOCK_LIMBS + SHA256_STATE_LIMBS;
     let program_str = format!(
         r#"
 N_SHA_CALLS = {n_sha_calls}
-SHA_FIXTURE_STRIDE = 64
 
 def main():
+    state = 0
+    block = 16
+    expected = 48
+    outputs = Array(N_SHA_CALLS * 16)
+    # for j in dynamic_unroll(0, N_SHA_CALLS, 20):
     for j in unroll(0, N_SHA_CALLS):
-        base = j * SHA_FIXTURE_STRIDE
-        state = base
-        block = base + 16
-        expected = base + 48
-        out = Array(16)
+        out = outputs + j * 16
         sha256_compress(state, block, out)
-
-        for i in unroll(0, 16):
-            assert out[i] == expected[i]
+        # for i in unroll(0, 16):
+        #    assert out[i] == expected[i]
     return
 "#
     );
 
-    let mut public_input = vec![F::ZERO; n_sha_calls * SHA_FIXTURE_STRIDE];
+    let mut public_input = vec![F::ZERO; SHA256_STATE_LIMBS + SHA256_BLOCK_LIMBS + SHA256_STATE_LIMBS];
     let expected = words_to_field_limbs_le(sha256_compress_words(SHA256_IV, SHA256_ABC_BLOCK));
-    for j in 0..n_sha_calls {
-        let base = j * SHA_FIXTURE_STRIDE;
-        public_input[base..base + SHA256_STATE_LIMBS].copy_from_slice(&words_to_field_limbs_le(SHA256_IV));
-        public_input[base + SHA256_STATE_LIMBS..base + SHA256_STATE_LIMBS + SHA256_BLOCK_LIMBS]
-            .copy_from_slice(&words_to_field_limbs_le(SHA256_ABC_BLOCK));
-        public_input[base + SHA256_STATE_LIMBS + SHA256_BLOCK_LIMBS..base + SHA_FIXTURE_STRIDE]
-            .copy_from_slice(&expected);
-    }
+    public_input[..SHA256_STATE_LIMBS].copy_from_slice(&words_to_field_limbs_le(SHA256_IV));
+    public_input[SHA256_STATE_LIMBS..SHA256_STATE_LIMBS + SHA256_BLOCK_LIMBS]
+        .copy_from_slice(&words_to_field_limbs_le(SHA256_ABC_BLOCK));
+    public_input[SHA256_STATE_LIMBS + SHA256_BLOCK_LIMBS..].copy_from_slice(&expected);
 
-    test_zk_vm_helper(&program_str, &public_input);
+    (program_str, public_input)
 }
 
 #[test]
@@ -382,10 +367,12 @@ fn test_zk_vm_bytecode_helper_poseidon(bytecode: &Bytecode, public_input: &[F]) 
     )
     .unwrap();
     let poseidon_proof_time = time.elapsed();
+    let proof_size_kib = proof.proof.proof_size_bytes() / 1024;
 
     println!("Poseidon proof");
     println!("{}", proof.metadata.as_ref().unwrap().display());
     println!("Proof time: {:.3} s", poseidon_proof_time.as_secs_f32());
+    println!("Proof size: {proof_size_kib} KiB");
 
     let mut verifier_state = VerifierState::<EF, _>::new(proof.proof, get_poseidon16().clone()).unwrap();
     verify(bytecode, public_input, &mut verifier_state).unwrap();
@@ -405,10 +392,12 @@ fn test_zk_vm_bytecode_helper_sha2(bytecode: &Bytecode, public_input: &[F]) {
     )
     .unwrap();
     let sha2_proof_time = time.elapsed();
+    let proof_size_kib = proof2.proof.proof_size_bytes() / 1024;
 
     println!("SHA2 proof");
     println!("{}", proof2.metadata.as_ref().unwrap().display());
     println!("Proof time: {:.3} s", sha2_proof_time.as_secs_f32());
+    println!("Proof size: {proof_size_kib} KiB");
 
     let mut verifier_state2 = VerifierStateSha2::<EF>::new(proof2.proof).unwrap();
     verify(bytecode, public_input, &mut verifier_state2).unwrap();

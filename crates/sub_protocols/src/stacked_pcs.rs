@@ -114,6 +114,7 @@ pub fn stack_polynomials_and_commit(
     )
 }
 
+#[instrument(skip_all)]
 pub fn stack_polynomials_and_commit_sha2(
     prover_state: &mut impl FSProver<EF, Digest = Sha256Digest>,
     whir_config_builder: &WhirConfigBuilder,
