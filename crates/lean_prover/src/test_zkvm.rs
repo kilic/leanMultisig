@@ -10,6 +10,55 @@ use rand::{RngExt, SeedableRng, rngs::StdRng};
 use utils::{get_poseidon16, init_tracing, poseidon16_compress};
 
 #[test]
+#[ignore = "benchmark; run with `cargo test --release -p lean_prover bench_poseidon -- --ignored --nocapture`"]
+fn bench_poseidon() {
+    utils::init_tracing();
+    let n_poseidon_calls = std::env::var("POSEIDON_BENCH_CALLS")
+        .ok()
+        .map(|raw| raw.parse::<usize>().expect("POSEIDON_BENCH_CALLS must be a usize"))
+        .unwrap_or(1);
+    let program_str = format!(
+        r#"
+N_POSEIDON_CALLS = {n_poseidon_calls}
+DIGEST_LEN = 8
+
+def main():
+    input_left = 0
+    input_right = DIGEST_LEN
+    outputs = Array(N_POSEIDON_CALLS * DIGEST_LEN)
+    for i in dynamic_unroll(0, N_POSEIDON_CALLS, 20):
+        out = outputs + i * DIGEST_LEN
+        poseidon16_compress(input_left, input_right, out)
+    return
+"#
+    );
+
+    let public_input: Vec<F> = (0..16).map(F::new).collect();
+    let bytecode = compile_program(&ProgramSource::Raw(program_str));
+    let witness = ExecutionWitness::default();
+    let starting_log_inv_rate = 1;
+
+    let time = std::time::Instant::now();
+    let proof = prove_execution(
+        &bytecode,
+        &public_input,
+        &witness,
+        &default_whir_config(starting_log_inv_rate),
+        false,
+    )
+    .unwrap();
+    let proof_time = time.elapsed();
+    let proof_size_kib = proof.proof.proof_size_fe() * F::bits() / (8 * 1024);
+
+    println!("{}", proof.metadata.as_ref().unwrap().display());
+    println!("Proof time: {:.3} s", proof_time.as_secs_f32());
+    println!("Proof size: {proof_size_kib} KiB");
+
+    let mut verifier_state = VerifierState::<EF, _>::new(proof.proof, get_poseidon16().clone()).unwrap();
+    verify(&bytecode, &public_input, &mut verifier_state).unwrap();
+}
+
+#[test]
 #[ignore = "benchmark; run with `cargo test --release -p lean_prover bench_sha256_compress -- --ignored --nocapture`"]
 fn bench_sha256_compress() {
     utils::init_tracing();
