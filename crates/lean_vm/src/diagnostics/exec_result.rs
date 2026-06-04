@@ -11,6 +11,7 @@ pub struct ExecutionMetadata {
     pub memory: usize,
     pub n_poseidons: usize,
     pub n_sha256_compress: usize,
+    pub n_sha256_compress_rn: usize,
     pub n_extension_ops: usize,
     pub bytecode_size: usize,
     pub public_input_size: usize,
@@ -62,6 +63,12 @@ impl ExecutionMetadata {
             out.push_str(&format!(
                 "SHA256Compress calls: {}\n",
                 pretty_integer(self.n_sha256_compress)
+            ));
+        }
+        if self.n_sha256_compress_rn > 0 {
+            out.push_str(&format!(
+                "SHA256CompressRn calls: {}\n",
+                pretty_integer(self.n_sha256_compress_rn)
             ));
         }
         if self.n_extension_ops > 0 {

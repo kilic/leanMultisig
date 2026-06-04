@@ -86,7 +86,7 @@ where
         MultilinearPoint(round_state.randomness_vec)
     }
 
-    #[instrument(name = "WHIR prove", skip_all)]
+    #[instrument(name = "WHIR prove2", skip_all, fields(k = self.num_variables))]
     pub fn prove2(
         &self,
         prover_state: &mut impl FSProver<EF, Digest = Sha256Digest>,

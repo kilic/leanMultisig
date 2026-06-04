@@ -1,5 +1,9 @@
 use std::collections::BTreeMap;
 
+use crate::sha256_rn_fixed_lookups::{
+    sha256_rn_fixed_lookup_multiplicity_trace_layouts, sha256_rn_fixed_lookup_transcript_scalars,
+    verify_sha256_rn_fixed_lookup,
+};
 use crate::*;
 use lean_vm::*;
 use sub_protocols::*;
@@ -19,8 +23,42 @@ where
     V: FSVerifier<EF>,
     V::Digest: WhirVerifierDigest<F, EF>,
 {
+    verify_inner(bytecode, public_input, verifier_state, None)
+}
+
+pub fn verify_with_sha256_rn_fixed_lookups<V>(
+    bytecode: &Bytecode,
+    public_input: &[F],
+    verifier_state: &mut V,
+    fixed_lookup_transcript_version: usize,
+) -> Result<ProofVerificationDetails, ProofError>
+where
+    V: FSVerifier<EF>,
+    V::Digest: WhirVerifierDigest<F, EF>,
+{
+    verify_inner(
+        bytecode,
+        public_input,
+        verifier_state,
+        Some(fixed_lookup_transcript_version),
+    )
+}
+
+fn verify_inner<V>(
+    bytecode: &Bytecode,
+    public_input: &[F],
+    verifier_state: &mut V,
+    sha256_rn_fixed_lookup_transcript_version: Option<usize>,
+) -> Result<ProofVerificationDetails, ProofError>
+where
+    V: FSVerifier<EF>,
+    V::Digest: WhirVerifierDigest<F, EF>,
+{
     verifier_state.observe_scalars(public_input);
     verifier_state.observe_scalars(&poseidon16_compress_pair(&bytecode.hash, &SNARK_DOMAIN_SEP));
+    if let Some(transcript_version) = sha256_rn_fixed_lookup_transcript_version {
+        verifier_state.observe_scalars(&sha256_rn_fixed_lookup_transcript_scalars(transcript_version));
+    }
     let dims = verifier_state
         .next_base_scalars_vec(3 + N_TABLES)?
         .into_iter()
@@ -63,13 +101,22 @@ where
         return Err(ProofError::InvalidProof);
     }
 
-    let parsed_commitment = stacked_pcs_parse_commitment_generic(
-        &whir_config,
-        verifier_state,
-        log_memory,
-        bytecode.log_size(),
-        &table_n_vars,
-    )?;
+    let aux_layouts = sha256_rn_fixed_lookup_transcript_version
+        .map(|_| sha256_rn_fixed_lookup_multiplicity_trace_layouts())
+        .unwrap_or_default();
+    let stack_layout = sha256_rn_fixed_lookup_transcript_version
+        .map(|_| compute_stack_layout(log_memory, bytecode.log_size(), &table_n_vars, &aux_layouts));
+    let parsed_commitment = if let Some(stack_layout) = &stack_layout {
+        stacked_pcs_parse_commitment_from_n_vars_generic(&whir_config, verifier_state, stack_layout.stacked_n_vars)?
+    } else {
+        stacked_pcs_parse_commitment_generic(
+            &whir_config,
+            verifier_state,
+            log_memory,
+            bytecode.log_size(),
+            &table_n_vars,
+        )?
+    };
 
     let logup_c = verifier_state.sample();
     let logup_alphas = verifier_state.sample_vec(log2_ceil_usize(max_bus_width_including_domainsep()));
@@ -97,6 +144,7 @@ where
             )],
         );
     }
+    let mut aux_committed_statements: AuxCommittedStatements = vec![Vec::new(); aux_layouts.len()];
 
     let bus_beta = verifier_state.sample();
     let air_alpha = verifier_state.sample();
@@ -175,45 +223,139 @@ where
         return Err(ProofError::InvalidProof);
     }
 
+    if sha256_rn_fixed_lookup_transcript_version.is_some() {
+        let fixed_lookup_statements =
+            verify_sha256_rn_fixed_lookup(verifier_state, table_n_vars[&Table::sha256_compress_rn()])?;
+        committed_statements
+            .get_mut(&Table::sha256_compress_rn())
+            .unwrap()
+            .push((
+                fixed_lookup_statements.rn_claim.0,
+                fixed_lookup_statements.rn_claim.1,
+                BTreeMap::new(),
+            ));
+        for (multiplicity_idx, multiplicity_claim) in fixed_lookup_statements.multiplicity_claims {
+            aux_committed_statements[multiplicity_idx].push(multiplicity_claim);
+        }
+    }
+
     let public_memory_random_point =
         MultilinearPoint(verifier_state.sample_vec(log2_strict_usize(public_memory.len())));
     let public_memory_eval = public_memory.evaluate(&public_memory_random_point);
 
-    let previous_statements = vec![
-        SparseStatement::new(
-            parsed_commitment.num_variables,
-            logup_statements.memory_and_acc_point,
-            vec![
-                SparseValue::new(0, logup_statements.value_memory),
-                SparseValue::new(1, logup_statements.value_memory_acc),
-            ],
-        ),
-        SparseStatement::new(
-            parsed_commitment.num_variables,
-            public_memory_random_point,
-            vec![SparseValue::new(0, public_memory_eval)],
-        ),
-        SparseStatement::new(
-            parsed_commitment.num_variables,
-            logup_statements.bytecode_and_acc_point,
-            vec![SparseValue::new(
-                (2 << log_memory) >> bytecode.log_size(),
-                logup_statements.value_bytecode_acc,
-            )],
-        ),
-    ];
+    let global_statements_base = if let Some(stack_layout) = &stack_layout {
+        let mut previous_statements = vec![
+            SparseStatement::new(
+                stack_layout.stacked_n_vars,
+                logup_statements.memory_and_acc_point,
+                vec![
+                    SparseValue::new(
+                        stack_layout.sparse_selector(StackSectionId::Memory, 0),
+                        logup_statements.value_memory,
+                    ),
+                    SparseValue::new(
+                        stack_layout.sparse_selector(StackSectionId::Memory, 1),
+                        logup_statements.value_memory_acc,
+                    ),
+                ],
+            ),
+            SparseStatement::new(
+                stack_layout.stacked_n_vars,
+                public_memory_random_point,
+                vec![SparseValue::new(
+                    stack_layout.sparse_selector_at_point_len(
+                        StackSectionId::Memory,
+                        0,
+                        log2_strict_usize(public_memory.len()),
+                    ),
+                    public_memory_eval,
+                )],
+            ),
+            SparseStatement::new(
+                stack_layout.stacked_n_vars,
+                logup_statements.bytecode_and_acc_point,
+                vec![SparseValue::new(
+                    stack_layout.sparse_selector(StackSectionId::BytecodeAcc, 0),
+                    logup_statements.value_bytecode_acc,
+                )],
+            ),
+        ];
+        let exec_n_vars = table_n_vars[&Table::execution()];
+        previous_statements.push(SparseStatement::unique_value(
+            stack_layout.stacked_n_vars,
+            stack_layout.absolute_index(StackSectionId::VmTable(Table::execution()), COL_PC, 0),
+            EF::from_usize(STARTING_PC),
+        ));
+        previous_statements.push(SparseStatement::unique_value(
+            stack_layout.stacked_n_vars,
+            stack_layout.absolute_index(
+                StackSectionId::VmTable(Table::execution()),
+                COL_PC,
+                (1 << exec_n_vars) - 1,
+            ),
+            EF::from_usize(ENDING_PC),
+        ));
 
-    let global_statements_base = stacked_pcs_global_statements(
-        parsed_commitment.num_variables,
-        log_memory,
-        bytecode.log_size(),
-        previous_statements,
-        &table_n_vars,
-        &committed_statements,
-    );
+        let mut per_section: BTreeMap<StackSectionId, Vec<_>> = BTreeMap::new();
+        for (table, statements) in &committed_statements {
+            per_section.insert(StackSectionId::VmTable(*table), statements.clone());
+        }
+        for (descriptor, statements) in aux_layouts.iter().zip(aux_committed_statements.iter()) {
+            per_section.insert(
+                descriptor.id,
+                statements
+                    .iter()
+                    .map(|(point, eq_values)| (point.clone(), eq_values.clone(), BTreeMap::new()))
+                    .collect(),
+            );
+        }
+
+        stacked_pcs_global_statements_from_layout(stack_layout, previous_statements, per_section)
+    } else {
+        let previous_statements = vec![
+            SparseStatement::new(
+                parsed_commitment.num_variables,
+                logup_statements.memory_and_acc_point,
+                vec![
+                    SparseValue::new(0, logup_statements.value_memory),
+                    SparseValue::new(1, logup_statements.value_memory_acc),
+                ],
+            ),
+            SparseStatement::new(
+                parsed_commitment.num_variables,
+                public_memory_random_point,
+                vec![SparseValue::new(0, public_memory_eval)],
+            ),
+            SparseStatement::new(
+                parsed_commitment.num_variables,
+                logup_statements.bytecode_and_acc_point,
+                vec![SparseValue::new(
+                    (2 << log_memory) >> bytecode.log_size(),
+                    logup_statements.value_bytecode_acc,
+                )],
+            ),
+        ];
+
+        stacked_pcs_global_statements(
+            parsed_commitment.num_variables,
+            log_memory,
+            bytecode.log_size(),
+            previous_statements,
+            &table_n_vars,
+            &committed_statements,
+        )
+    };
 
     let num_whir_statements = global_statements_base.iter().map(|s| s.values.len()).sum::<usize>();
-    assert_eq!(num_whir_statements, total_whir_statements());
+    let fixed_lookup_rn_openings = if sha256_rn_fixed_lookup_transcript_version.is_some() {
+        1 + NUM_SHA256_RN_AIR_COLS
+    } else {
+        0
+    };
+    assert_eq!(
+        num_whir_statements,
+        total_whir_statements_with_aux(&aux_layouts) + fixed_lookup_rn_openings
+    );
 
     WhirConfig::new(&whir_config, parsed_commitment.num_variables).verify(
         verifier_state,

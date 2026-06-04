@@ -155,6 +155,7 @@ pub fn get_execution_trace(bytecode: &Bytecode, execution_result: ExecutionResul
         Table::execution(),
         TableTrace {
             columns: Vec::from(main_trace),
+            virtual_columns: Vec::new(),
             non_padded_n_rows: n_cycles,
             log_n_rows: log2_ceil_usize(n_cycles),
         },
@@ -187,5 +188,10 @@ fn pad_table(table: &Table, traces: &mut BTreeMap<Table, TableTrace>, padding_me
     trace.columns.par_iter_mut().enumerate().for_each(|(i, col)| {
         assert!(col.len() <= h); // potentially some columns have not been filled (in Poseidon -> we fill it later with SIMD + parallelism), but the first one should always be representative
         col.resize(n_rows, padding_row[i]);
+    });
+    let virtual_padding_row = table.virtual_padding_row(padding_memory);
+    trace.virtual_columns.par_iter_mut().enumerate().for_each(|(i, col)| {
+        assert_eq!(col.len(), h, "virtual column {}, table {}", i, table.name());
+        col.resize(n_rows, virtual_padding_row[i]);
     });
 }

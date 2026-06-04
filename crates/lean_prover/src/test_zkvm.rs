@@ -1,7 +1,8 @@
 use crate::{
     default_whir_config,
-    prove_execution::{prove_execution, prove_execution_sha2},
-    verify_execution::verify,
+    prove_execution::{prove_execution, prove_execution_sha2, prove_execution_sha2_with_sha256_rn_fixed_lookups},
+    sha256_rn_fixed_lookups::sha256_rn_fixed_lookup_params,
+    verify_execution::{verify, verify_with_sha256_rn_fixed_lookups},
 };
 use backend::*;
 use lean_compiler::*;
@@ -46,6 +47,13 @@ fn bench_sha256_compress_sha2_backend() {
 }
 
 #[test]
+#[ignore = "benchmark; run with `cargo test --release -p lean_prover bench_sha256_compress_rn_sha2_backend -- --ignored --nocapture`"]
+fn bench_sha256_compress_rn_sha2_backend() {
+    let (program_str, public_input) = sha256_compress_bench_fixture_for(SHA256_COMPRESS_RN_NAME);
+    test_zk_vm_helper_sha2_with_sha256_rn_fixed_lookups(&program_str, &public_input);
+}
+
+#[test]
 #[ignore = "benchmark; run with `cargo test --release -p lean_prover bench_sha256_compress_poseidon_backend -- --ignored --nocapture`"]
 fn bench_sha256_compress_poseidon_backend() {
     let (program_str, public_input) = sha256_compress_bench_fixture();
@@ -53,6 +61,10 @@ fn bench_sha256_compress_poseidon_backend() {
 }
 
 fn sha256_compress_bench_fixture() -> (String, Vec<F>) {
+    sha256_compress_bench_fixture_for(SHA256_COMPRESS_NAME)
+}
+
+fn sha256_compress_bench_fixture_for(precompile_name: &str) -> (String, Vec<F>) {
     let n_sha_calls = std::env::var("SHA256_BENCH_CALLS")
         .ok()
         .map(|raw| raw.parse::<usize>().expect("SHA256_BENCH_CALLS must be a usize"))
@@ -69,7 +81,7 @@ def main():
     # for j in dynamic_unroll(0, N_SHA_CALLS, 20):
     for j in unroll(0, N_SHA_CALLS):
         out = outputs + j * 16
-        sha256_compress(state, block, out)
+        {precompile_name}(state, block, out)
         # for i in unroll(0, 16):
         #    assert out[i] == expected[i]
     return
@@ -353,6 +365,12 @@ fn test_zk_vm_helper_sha2(program_str: &str, public_input: &[F]) {
     test_zk_vm_bytecode_helper_sha2(&bytecode, public_input);
 }
 
+fn test_zk_vm_helper_sha2_with_sha256_rn_fixed_lookups(program_str: &str, public_input: &[F]) {
+    utils::init_tracing();
+    let bytecode = compile_program(&ProgramSource::Raw(program_str.to_string()));
+    test_zk_vm_bytecode_helper_sha2_with_sha256_rn_fixed_lookups(&bytecode, public_input);
+}
+
 fn test_zk_vm_bytecode_helper_poseidon(bytecode: &Bytecode, public_input: &[F]) {
     let starting_log_inv_rate = 1;
     let witness = ExecutionWitness::default();
@@ -401,4 +419,37 @@ fn test_zk_vm_bytecode_helper_sha2(bytecode: &Bytecode, public_input: &[F]) {
 
     let mut verifier_state2 = VerifierStateSha2::<EF>::new(proof2.proof).unwrap();
     verify(bytecode, public_input, &mut verifier_state2).unwrap();
+}
+
+fn test_zk_vm_bytecode_helper_sha2_with_sha256_rn_fixed_lookups(bytecode: &Bytecode, public_input: &[F]) {
+    let starting_log_inv_rate = 1;
+    let witness = ExecutionWitness::default();
+    let params = sha256_rn_fixed_lookup_params();
+
+    let time = std::time::Instant::now();
+    let proof = prove_execution_sha2_with_sha256_rn_fixed_lookups(
+        bytecode,
+        public_input,
+        &witness,
+        &default_whir_config(starting_log_inv_rate),
+        false,
+        &params,
+    )
+    .unwrap();
+    let sha2_proof_time = time.elapsed();
+    let proof_size_kib = proof.proof.proof_size_bytes() / 1024;
+
+    println!("SHA2 proof with SHA256 RN fixed lookups");
+    println!("{}", proof.metadata.as_ref().unwrap().display());
+    println!("Proof time: {:.3} s", sha2_proof_time.as_secs_f32());
+    println!("Proof size: {proof_size_kib} KiB");
+
+    let mut verifier_state = VerifierStateSha2::<EF>::new(proof.proof).unwrap();
+    verify_with_sha256_rn_fixed_lookups(
+        bytecode,
+        public_input,
+        &mut verifier_state,
+        params.verifier_transcript_version(),
+    )
+    .unwrap();
 }

@@ -1,5 +1,9 @@
 use std::collections::BTreeMap;
 
+use crate::sha256_rn_fixed_lookups::{
+    Sha256RnFixedLookupProverParams, build_sha256_rn_fixed_lookup_multiplicity_traces, prove_sha256_rn_fixed_lookup,
+    sha256_rn_fixed_lookup_transcript_scalars,
+};
 use crate::*;
 use backend::merkle::Sha256Digest;
 use lean_vm::*;
@@ -28,7 +32,7 @@ where
 {
     type InnerWitness;
 
-    fn stack_polynomials_and_commit(
+    fn stack_polynomials_and_commit_legacy(
         prover_state: &mut P,
         whir_config: &WhirConfigBuilder,
         memory: &[F],
@@ -36,6 +40,16 @@ where
         bytecode_acc: &[F],
         traces: &BTreeMap<Table, TableTrace>,
     ) -> StackedPcsWitness<Self::InnerWitness>;
+
+    fn stack_polynomials_and_commit(
+        prover_state: &mut P,
+        whir_config: &WhirConfigBuilder,
+        memory: &[F],
+        memory_acc: &[F],
+        bytecode_acc: &[F],
+        traces: &BTreeMap<Table, TableTrace>,
+        aux_traces: &[AuxTrace],
+    ) -> StackedPcsWitnessWithLayout<Self::InnerWitness>;
 
     fn prove_whir(
         whir_config: &WhirConfig<EF>,
@@ -54,7 +68,7 @@ where
 {
     type InnerWitness = Witness<EF>;
 
-    fn stack_polynomials_and_commit(
+    fn stack_polynomials_and_commit_legacy(
         prover_state: &mut P,
         whir_config: &WhirConfigBuilder,
         memory: &[F],
@@ -63,6 +77,26 @@ where
         traces: &BTreeMap<Table, TableTrace>,
     ) -> StackedPcsWitness<Self::InnerWitness> {
         stack_polynomials_and_commit(prover_state, whir_config, memory, memory_acc, bytecode_acc, traces)
+    }
+
+    fn stack_polynomials_and_commit(
+        prover_state: &mut P,
+        whir_config: &WhirConfigBuilder,
+        memory: &[F],
+        memory_acc: &[F],
+        bytecode_acc: &[F],
+        traces: &BTreeMap<Table, TableTrace>,
+        aux_traces: &[AuxTrace],
+    ) -> StackedPcsWitnessWithLayout<Self::InnerWitness> {
+        stack_polynomials_and_commit_with_aux(
+            prover_state,
+            whir_config,
+            memory,
+            memory_acc,
+            bytecode_acc,
+            traces,
+            aux_traces,
+        )
     }
 
     fn prove_whir(
@@ -84,7 +118,7 @@ where
 {
     type InnerWitness = Witness2<EF>;
 
-    fn stack_polynomials_and_commit(
+    fn stack_polynomials_and_commit_legacy(
         prover_state: &mut P,
         whir_config: &WhirConfigBuilder,
         memory: &[F],
@@ -93,6 +127,26 @@ where
         traces: &BTreeMap<Table, TableTrace>,
     ) -> StackedPcsWitness<Self::InnerWitness> {
         stack_polynomials_and_commit_sha2(prover_state, whir_config, memory, memory_acc, bytecode_acc, traces)
+    }
+
+    fn stack_polynomials_and_commit(
+        prover_state: &mut P,
+        whir_config: &WhirConfigBuilder,
+        memory: &[F],
+        memory_acc: &[F],
+        bytecode_acc: &[F],
+        traces: &BTreeMap<Table, TableTrace>,
+        aux_traces: &[AuxTrace],
+    ) -> StackedPcsWitnessWithLayout<Self::InnerWitness> {
+        stack_polynomials_and_commit_sha2_with_aux(
+            prover_state,
+            whir_config,
+            memory,
+            memory_acc,
+            bytecode_acc,
+            traces,
+            aux_traces,
+        )
     }
 
     fn prove_whir(
@@ -121,6 +175,7 @@ pub fn prove_execution(
         vm_profiler,
         build_prover_state(),
         |prover_state| prover_state.into_proof(),
+        None,
     )
 }
 
@@ -139,6 +194,47 @@ pub fn prove_execution_sha2(
         vm_profiler,
         build_prover_state_sha2(),
         |prover_state| prover_state.into_proof(),
+        None,
+    )
+}
+
+pub fn prove_execution_with_sha256_rn_fixed_lookups(
+    bytecode: &Bytecode,
+    public_input: &[F],
+    witness: &ExecutionWitness,
+    whir_config: &WhirConfigBuilder,
+    vm_profiler: bool,
+    fixed_lookups: &Sha256RnFixedLookupProverParams,
+) -> Result<ExecutionProof, ProverError> {
+    prove_execution_with::<_, PoseidonExecutionBackend, _>(
+        bytecode,
+        public_input,
+        witness,
+        whir_config,
+        vm_profiler,
+        build_prover_state(),
+        |prover_state| prover_state.into_proof(),
+        Some(fixed_lookups),
+    )
+}
+
+pub fn prove_execution_sha2_with_sha256_rn_fixed_lookups(
+    bytecode: &Bytecode,
+    public_input: &[F],
+    witness: &ExecutionWitness,
+    whir_config: &WhirConfigBuilder,
+    vm_profiler: bool,
+    fixed_lookups: &Sha256RnFixedLookupProverParams,
+) -> Result<ExecutionProof<Sha256Digest>, ProverError> {
+    prove_execution_with::<_, Sha2ExecutionBackend, _>(
+        bytecode,
+        public_input,
+        witness,
+        whir_config,
+        vm_profiler,
+        build_prover_state_sha2(),
+        |prover_state| prover_state.into_proof(),
+        Some(fixed_lookups),
     )
 }
 
@@ -150,6 +246,7 @@ fn prove_execution_with<P, B, IntoProof>(
     vm_profiler: bool,
     mut prover_state: P,
     into_proof: IntoProof,
+    sha256_rn_fixed_lookups: Option<&Sha256RnFixedLookupProverParams>,
 ) -> Result<ExecutionProof<P::Digest>, ProverError>
 where
     P: FSProver<EF>,
@@ -179,6 +276,11 @@ where
     prover_state.observe_scalars(public_input);
     let bytecode_hash_with_domain_sep = poseidon16_compress_pair(&bytecode.hash, &SNARK_DOMAIN_SEP);
     prover_state.observe_scalars(&bytecode_hash_with_domain_sep);
+    if let Some(fixed_lookups) = sha256_rn_fixed_lookups {
+        prover_state.observe_scalars(&sha256_rn_fixed_lookup_transcript_scalars(
+            fixed_lookups.verifier_transcript_version(),
+        ));
+    }
     let execution_metadata_scalars = [
         vec![
             whir_config.starting_log_inv_rate,
@@ -240,15 +342,41 @@ where
         }
     });
 
+    let multiplicity_traces = sha256_rn_fixed_lookups
+        .map(|_| build_sha256_rn_fixed_lookup_multiplicity_traces(&traces[&Table::sha256_compress_rn()]))
+        .unwrap_or_default();
+    let aux_traces = multiplicity_traces
+        .iter()
+        .cloned()
+        .map(|trace| trace.into_aux_trace())
+        .collect::<Vec<_>>();
+
+    enum PcsWitness<InnerWitness> {
+        Legacy(StackedPcsWitness<InnerWitness>),
+        Aux(StackedPcsWitnessWithLayout<InnerWitness>),
+    }
+
     // 1st Commitment
-    let stacked_pcs_witness = B::stack_polynomials_and_commit(
-        &mut prover_state,
-        whir_config,
-        &memory,
-        &memory_acc,
-        &bytecode_acc,
-        &traces,
-    );
+    let stacked_pcs_witness = if sha256_rn_fixed_lookups.is_some() {
+        PcsWitness::Aux(B::stack_polynomials_and_commit(
+            &mut prover_state,
+            whir_config,
+            &memory,
+            &memory_acc,
+            &bytecode_acc,
+            &traces,
+            &aux_traces,
+        ))
+    } else {
+        PcsWitness::Legacy(B::stack_polynomials_and_commit_legacy(
+            &mut prover_state,
+            whir_config,
+            &memory,
+            &memory_acc,
+            &bytecode_acc,
+            &traces,
+        ))
+    };
 
     // logup (GKR)
     let logup_c = prover_state.sample();
@@ -278,6 +406,7 @@ where
             )],
         );
     }
+    let mut aux_committed_statements: AuxCommittedStatements = vec![Vec::new(); aux_traces.len()];
 
     let bus_beta = prover_state.sample();
     let air_alpha = prover_state.sample();
@@ -350,48 +479,149 @@ where
         committed_statements.get_mut(table).unwrap().push(claim);
     }
 
+    if sha256_rn_fixed_lookups.is_some() {
+        let fixed_lookup_statements = prove_sha256_rn_fixed_lookup(
+            &mut prover_state,
+            &traces[&Table::sha256_compress_rn()],
+            &multiplicity_traces,
+        );
+        committed_statements
+            .get_mut(&Table::sha256_compress_rn())
+            .unwrap()
+            .push((
+                fixed_lookup_statements.rn_claim.0,
+                fixed_lookup_statements.rn_claim.1,
+                BTreeMap::new(),
+            ));
+        for (multiplicity_idx, multiplicity_claim) in fixed_lookup_statements.multiplicity_claims {
+            aux_committed_statements[multiplicity_idx].push(multiplicity_claim);
+        }
+    }
+
     let public_memory_random_point = MultilinearPoint(prover_state.sample_vec(log2_strict_usize(public_memory_size)));
     let public_memory_eval = (&memory[..public_memory_size]).evaluate(&public_memory_random_point);
+    match stacked_pcs_witness {
+        PcsWitness::Legacy(stacked_pcs_witness) => {
+            let previous_statements = vec![
+                SparseStatement::new(
+                    stacked_pcs_witness.stacked_n_vars,
+                    logup_statements.memory_and_acc_point,
+                    vec![
+                        SparseValue::new(0, logup_statements.value_memory),
+                        SparseValue::new(1, logup_statements.value_memory_acc),
+                    ],
+                ),
+                SparseStatement::new(
+                    stacked_pcs_witness.stacked_n_vars,
+                    public_memory_random_point,
+                    vec![SparseValue::new(0, public_memory_eval)],
+                ),
+                SparseStatement::new(
+                    stacked_pcs_witness.stacked_n_vars,
+                    logup_statements.bytecode_and_acc_point,
+                    vec![SparseValue::new(
+                        (2 * memory.len()) >> bytecode.log_size(),
+                        logup_statements.value_bytecode_acc,
+                    )],
+                ),
+            ];
+            let global_statements_base = stacked_pcs_global_statements(
+                stacked_pcs_witness.stacked_n_vars,
+                log2_strict_usize(memory.len()),
+                bytecode.log_size(),
+                previous_statements,
+                &tables_log_heights,
+                &committed_statements,
+            );
 
-    let previous_statements = vec![
-        SparseStatement::new(
-            stacked_pcs_witness.stacked_n_vars,
-            logup_statements.memory_and_acc_point,
-            vec![
-                SparseValue::new(0, logup_statements.value_memory),
-                SparseValue::new(1, logup_statements.value_memory_acc),
-            ],
-        ),
-        SparseStatement::new(
-            stacked_pcs_witness.stacked_n_vars,
-            public_memory_random_point,
-            vec![SparseValue::new(0, public_memory_eval)],
-        ),
-        SparseStatement::new(
-            stacked_pcs_witness.stacked_n_vars,
-            logup_statements.bytecode_and_acc_point,
-            vec![SparseValue::new(
-                (2 * memory.len()) >> bytecode.log_size(),
-                logup_statements.value_bytecode_acc,
-            )],
-        ),
-    ];
-    let global_statements_base = stacked_pcs_global_statements(
-        stacked_pcs_witness.stacked_n_vars,
-        log2_strict_usize(memory.len()),
-        bytecode.log_size(),
-        previous_statements,
-        &tables_log_heights,
-        &committed_statements,
-    );
+            B::prove_whir(
+                &WhirConfig::new(whir_config, stacked_pcs_witness.global_polynomial.by_ref().n_vars()),
+                &mut prover_state,
+                global_statements_base,
+                stacked_pcs_witness.inner_witness,
+                &stacked_pcs_witness.global_polynomial.by_ref(),
+            );
+        }
+        PcsWitness::Aux(stacked_pcs_witness) => {
+            let stack_layout = &stacked_pcs_witness.layout;
+            let mut previous_statements = vec![
+                SparseStatement::new(
+                    stack_layout.stacked_n_vars,
+                    logup_statements.memory_and_acc_point,
+                    vec![
+                        SparseValue::new(
+                            stack_layout.sparse_selector(StackSectionId::Memory, 0),
+                            logup_statements.value_memory,
+                        ),
+                        SparseValue::new(
+                            stack_layout.sparse_selector(StackSectionId::Memory, 1),
+                            logup_statements.value_memory_acc,
+                        ),
+                    ],
+                ),
+                SparseStatement::new(
+                    stack_layout.stacked_n_vars,
+                    public_memory_random_point,
+                    vec![SparseValue::new(
+                        stack_layout.sparse_selector_at_point_len(
+                            StackSectionId::Memory,
+                            0,
+                            log2_strict_usize(public_memory_size),
+                        ),
+                        public_memory_eval,
+                    )],
+                ),
+                SparseStatement::new(
+                    stack_layout.stacked_n_vars,
+                    logup_statements.bytecode_and_acc_point,
+                    vec![SparseValue::new(
+                        stack_layout.sparse_selector(StackSectionId::BytecodeAcc, 0),
+                        logup_statements.value_bytecode_acc,
+                    )],
+                ),
+            ];
+            let exec_n_vars = tables_log_heights[&Table::execution()];
+            previous_statements.push(SparseStatement::unique_value(
+                stack_layout.stacked_n_vars,
+                stack_layout.absolute_index(StackSectionId::VmTable(Table::execution()), COL_PC, 0),
+                EF::from_usize(STARTING_PC),
+            ));
+            previous_statements.push(SparseStatement::unique_value(
+                stack_layout.stacked_n_vars,
+                stack_layout.absolute_index(
+                    StackSectionId::VmTable(Table::execution()),
+                    COL_PC,
+                    (1 << exec_n_vars) - 1,
+                ),
+                EF::from_usize(ENDING_PC),
+            ));
 
-    B::prove_whir(
-        &WhirConfig::new(whir_config, stacked_pcs_witness.global_polynomial.by_ref().n_vars()),
-        &mut prover_state,
-        global_statements_base,
-        stacked_pcs_witness.inner_witness,
-        &stacked_pcs_witness.global_polynomial.by_ref(),
-    );
+            let mut per_section: BTreeMap<StackSectionId, Vec<_>> = BTreeMap::new();
+            for (table, statements) in &committed_statements {
+                per_section.insert(StackSectionId::VmTable(*table), statements.clone());
+            }
+            for (trace, statements) in aux_traces.iter().zip(aux_committed_statements.iter()) {
+                per_section.insert(
+                    trace.id,
+                    statements
+                        .iter()
+                        .map(|(point, eq_values)| (point.clone(), eq_values.clone(), BTreeMap::new()))
+                        .collect(),
+                );
+            }
+
+            let global_statements_base =
+                stacked_pcs_global_statements_from_layout(stack_layout, previous_statements, per_section);
+
+            B::prove_whir(
+                &WhirConfig::new(whir_config, stacked_pcs_witness.global_polynomial.by_ref().n_vars()),
+                &mut prover_state,
+                global_statements_base,
+                stacked_pcs_witness.inner_witness,
+                &stacked_pcs_witness.global_polynomial.by_ref(),
+            );
+        }
+    }
 
     tracing::info!("total pow_grinding time: {} ms", pow_grinding_time().as_millis());
     reset_pow_grinding_time();

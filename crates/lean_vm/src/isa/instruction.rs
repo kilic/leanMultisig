@@ -6,7 +6,7 @@ use crate::core::{F, Label};
 use crate::diagnostics::RunnerError;
 use crate::execution::memory::MemoryAccess;
 use crate::tables::TableT;
-use crate::{ExtensionOpMode, POSEIDON16_NAME, SHA256_COMPRESS_NAME, Table, TableTrace};
+use crate::{ExtensionOpMode, POSEIDON16_NAME, SHA256_COMPRESS_NAME, SHA256_COMPRESS_RN_NAME, Table, TableTrace};
 use backend::*;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -69,6 +69,7 @@ pub enum PrecompileCompTimeArgs<S> {
         hardcoded_offset_left: Option<S>,
     },
     Sha256Compress,
+    Sha256CompressRn,
     ExtensionOp {
         size: S,
         mode: ExtensionOpMode,
@@ -80,6 +81,7 @@ impl<S> PrecompileCompTimeArgs<S> {
         match self {
             Self::Poseidon16 { .. } => Table::poseidon16(),
             Self::Sha256Compress => Table::sha256_compress(),
+            Self::Sha256CompressRn => Table::sha256_compress_rn(),
             Self::ExtensionOp { .. } => Table::extension_op(),
         }
     }
@@ -94,6 +96,7 @@ impl<S> PrecompileCompTimeArgs<S> {
                 hardcoded_offset_left: hardcoded_left_4.map(&mut f),
             },
             Self::Sha256Compress => PrecompileCompTimeArgs::Sha256Compress,
+            Self::Sha256CompressRn => PrecompileCompTimeArgs::Sha256CompressRn,
             Self::ExtensionOp { size, mode } => PrecompileCompTimeArgs::ExtensionOp { size: f(size), mode },
         }
     }
@@ -266,6 +269,9 @@ impl<V: Display, S: Display> Display for PrecompileArgs<V, S> {
             },
             PrecompileCompTimeArgs::Sha256Compress => {
                 write!(f, "{SHA256_COMPRESS_NAME}({arg_0}, {arg_1}, {res})")
+            }
+            PrecompileCompTimeArgs::Sha256CompressRn => {
+                write!(f, "{SHA256_COMPRESS_RN_NAME}({arg_0}, {arg_1}, {res})")
             }
             PrecompileCompTimeArgs::ExtensionOp { size, mode } => {
                 write!(f, "{}({arg_0}, {arg_1}, {res}, {size})", mode.name())
