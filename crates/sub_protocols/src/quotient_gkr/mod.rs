@@ -36,6 +36,7 @@ pub fn prove_gkr_quotient<'a, EF: ExtensionField<PF<EF>>>(
 ) -> (EF, MultilinearPoint<EF>) {
     let w = packing_log_width::<EF>();
     let total_n_vars = log2_ceil_usize(nums_br.len()) + w;
+    tracing::info!("gkr vars = {total_n_vars}");
     assert!(total_n_vars > N_VARS_TO_SEND_GKR_COEFFS);
     assert!(pivot > w && total_n_vars > w);
     assert_eq!(nums_br.len(), dens_br.len());

@@ -30,7 +30,7 @@ pub const MAX_LOG_N_ROWS_PER_TABLE: [(Table, usize); 5] = [
     (Table::sha256_compress(), 17),
     // RN SHA256 uses two AIR rows per compress call; keep this high enough
     // for benchmark sweeps through 2^15 calls.
-    (Table::sha256_compress_rn(), 16),
+    (Table::sha256_compress_rn(), 17),
 ];
 
 pub fn max_log_n_rows_per_table(table: &Table) -> usize {
