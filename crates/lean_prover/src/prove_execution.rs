@@ -160,6 +160,91 @@ where
     }
 }
 
+fn push_stacked_poly_contributor(
+    log: &mut String,
+    label: impl std::fmt::Display,
+    log_n_rows: usize,
+    n_columns: usize,
+) -> usize {
+    let cells = n_columns << log_n_rows;
+    let k_total = log2_ceil_usize(cells);
+    log.push_str(&format!(
+        "\n  {label}: k={log_n_rows}, n={n_columns}, cells={cells}, k_total={k_total}"
+    ));
+    cells
+}
+
+fn log_stacked_poly_contributors(
+    memory: &[F],
+    memory_acc: &[F],
+    bytecode_acc: &[F],
+    traces: &BTreeMap<Table, TableTrace>,
+    aux_traces: &[AuxTrace],
+    use_aux_layout: bool,
+) {
+    assert_eq!(memory.len(), memory_acc.len());
+
+    let tables_log_heights: BTreeMap<Table, VarCount> =
+        traces.iter().map(|(table, trace)| (*table, trace.log_n_rows)).collect();
+    let max_table_log_n_rows = tables_log_heights.values().copied().max().unwrap_or_default();
+    let memory_log_n_rows = log2_strict_usize(memory.len());
+    let bytecode_actual_log_n_rows = log2_strict_usize(bytecode_acc.len());
+    let bytecode_committed_log_n_rows = if use_aux_layout {
+        bytecode_actual_log_n_rows
+    } else {
+        bytecode_actual_log_n_rows.max(max_table_log_n_rows)
+    };
+    let layout_name = if use_aux_layout {
+        "RN aux layout"
+    } else {
+        "legacy layout"
+    };
+
+    let mut contributor_log =
+        format!("Stacked polynomial contributors ({layout_name}; format: column type: k, n, k_total)");
+    let mut total_cells = 0usize;
+    let mut aux_cells = 0usize;
+    total_cells += push_stacked_poly_contributor(&mut contributor_log, "memory", memory_log_n_rows, 1);
+    total_cells += push_stacked_poly_contributor(&mut contributor_log, "memory_acc", memory_log_n_rows, 1);
+
+    let bytecode_label = if bytecode_committed_log_n_rows == bytecode_actual_log_n_rows {
+        "bytecode_acc".to_string()
+    } else {
+        format!("bytecode_acc (padded from 2^{bytecode_actual_log_n_rows})")
+    };
+    total_cells +=
+        push_stacked_poly_contributor(&mut contributor_log, bytecode_label, bytecode_committed_log_n_rows, 1);
+
+    for (table, log_n_rows) in sort_tables_by_height(&tables_log_heights) {
+        total_cells += push_stacked_poly_contributor(
+            &mut contributor_log,
+            format!("trace table {}", table.name()),
+            log_n_rows,
+            table.n_columns(),
+        );
+    }
+
+    for trace in aux_traces {
+        let cells = push_stacked_poly_contributor(
+            &mut contributor_log,
+            format!("aux multiplicity {}", trace.id),
+            trace.log_n_rows,
+            trace.columns.len(),
+        );
+        aux_cells += cells;
+        total_cells += cells;
+    }
+
+    let aux_log_ceil = if aux_cells == 0 { 0 } else { log2_ceil_usize(aux_cells) };
+    let stacked_n_vars = log2_ceil_usize(total_cells);
+    contributor_log.push_str(&format!("\n  aux: cells={aux_cells}, log_ceil={aux_log_ceil}"));
+    contributor_log.push_str(&format!(
+        "\n  total: cells={total_cells}, committed_capacity=2^{stacked_n_vars} ({})",
+        1usize << stacked_n_vars
+    ));
+    tracing::info!("{}", contributor_log.yellow());
+}
+
 pub fn prove_execution(
     bytecode: &Bytecode,
     public_input: &[F],
@@ -350,6 +435,14 @@ where
         .cloned()
         .map(|trace| trace.into_aux_trace())
         .collect::<Vec<_>>();
+    log_stacked_poly_contributors(
+        &memory,
+        &memory_acc,
+        &bytecode_acc,
+        &traces,
+        &aux_traces,
+        sha256_rn_fixed_lookups.is_some(),
+    );
 
     enum PcsWitness<InnerWitness> {
         Legacy(StackedPcsWitness<InnerWitness>),

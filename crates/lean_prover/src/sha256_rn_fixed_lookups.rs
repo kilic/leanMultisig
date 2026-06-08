@@ -1833,7 +1833,7 @@ pub fn prove_sha256_rn_fixed_lookup(
     });
     assert_eq!(offset, total_active_len);
 
-    let (sum, gkr_point) = tracing::info_span!("SHA256 RN fixed lookup GKR").in_scope(|| {
+    let (sum, gkr_point) = tracing::info_span!("Fixed lookup GKR").in_scope(|| {
         prove_gkr_quotient::<EF>(
             prover_state,
             PFPacking::<EF>::pack_slice(&numerators),
